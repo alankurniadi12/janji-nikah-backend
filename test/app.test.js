@@ -77,6 +77,22 @@ test("dashboard routes require authentication", async () => {
   });
 });
 
+test("admin management routes require authentication", async () => {
+  await withTestServer(async (baseUrl) => {
+    const membersResponse = await fetch(`${baseUrl}/api/admin/members`);
+    const membersBody = await membersResponse.json();
+
+    assert.equal(membersResponse.status, 401);
+    assert.equal(membersBody.message, "Akses membutuhkan token.");
+
+    const themesResponse = await fetch(`${baseUrl}/api/admin/themes`);
+    const themesBody = await themesResponse.json();
+
+    assert.equal(themesResponse.status, 401);
+    assert.equal(themesBody.message, "Akses membutuhkan token.");
+  });
+});
+
 test("phase 4 payment routes protect member and admin operations", async () => {
   await withTestServer(async (baseUrl) => {
     const memberTransactionsResponse = await fetch(`${baseUrl}/api/member/transactions`);

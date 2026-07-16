@@ -1,6 +1,26 @@
 import { Router } from "express";
 
-import { adminDashboard } from "../controllers/adminController.js";
+import {
+  adminAdjustMemberCredits,
+  adminAuditLogs,
+  adminDashboard,
+  adminInvitationDetail,
+  adminInvitations,
+  adminMemberDetail,
+  adminMembers,
+  adminUnlockInvitation,
+  adminUpdateMemberStatus
+} from "../controllers/adminController.js";
+import {
+  adminCreateMusic,
+  adminCreateTheme,
+  adminMusic,
+  adminSetMusicStatus,
+  adminSetThemeStatus,
+  adminThemes,
+  adminUpdateMusic,
+  adminUpdateTheme
+} from "../controllers/catalogController.js";
 import {
   adminCreateCreditPackage,
   adminCreditPackages,
@@ -19,6 +39,10 @@ export const adminRoutes = Router();
 
 adminRoutes.use(authenticate, requireRole("admin"));
 adminRoutes.get("/dashboard", adminDashboard);
+adminRoutes.get("/members", adminMembers);
+adminRoutes.get("/members/:id", adminMemberDetail);
+adminRoutes.patch("/members/:id/status", adminUpdateMemberStatus);
+adminRoutes.post("/members/:id/credits/adjust", adminAdjustMemberCredits);
 adminRoutes.get("/credit-packages", adminCreditPackages);
 adminRoutes.post("/credit-packages", adminCreateCreditPackage);
 adminRoutes.patch("/credit-packages/:id", adminUpdateCreditPackage);
@@ -27,3 +51,15 @@ adminRoutes.get("/transactions", adminTransactions);
 adminRoutes.get("/transactions/:id", adminTransactionDetail);
 adminRoutes.post("/transactions/:id/approve", adminApproveTransaction);
 adminRoutes.post("/transactions/:id/reject", adminRejectTransaction);
+adminRoutes.get("/themes", adminThemes);
+adminRoutes.post("/themes", adminCreateTheme);
+adminRoutes.patch("/themes/:id", adminUpdateTheme);
+adminRoutes.patch("/themes/:id/status", adminSetThemeStatus);
+adminRoutes.get("/music", adminMusic);
+adminRoutes.post("/music", adminCreateMusic);
+adminRoutes.patch("/music/:id", adminUpdateMusic);
+adminRoutes.patch("/music/:id/status", adminSetMusicStatus);
+adminRoutes.get("/invitations", adminInvitations);
+adminRoutes.get("/invitations/:id", adminInvitationDetail);
+adminRoutes.post("/invitations/:id/unlock", adminUnlockInvitation);
+adminRoutes.get("/audit-logs", adminAuditLogs);
