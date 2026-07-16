@@ -92,3 +92,13 @@ test("phase 4 payment routes protect member and admin operations", async () => {
     assert.equal(adminTransactionsBody.message, "Akses membutuhkan token.");
   });
 });
+
+test("invitation builder routes require authentication", async () => {
+  await withTestServer(async (baseUrl) => {
+    const response = await fetch(`${baseUrl}/api/member/invitations`);
+    const body = await response.json();
+
+    assert.equal(response.status, 401);
+    assert.equal(body.message, "Akses membutuhkan token.");
+  });
+});

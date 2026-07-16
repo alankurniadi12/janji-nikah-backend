@@ -33,6 +33,32 @@ const eventSchema = new Schema(
   { _id: false }
 );
 
+const envelopeMethodSchema = new Schema(
+  {
+    type: {
+      type: String,
+      enum: ["bank", "ewallet"],
+      required: true
+    },
+    providerName: {
+      type: String,
+      required: true,
+      trim: true
+    },
+    accountNumber: {
+      type: String,
+      required: true,
+      trim: true
+    },
+    accountHolder: {
+      type: String,
+      required: true,
+      trim: true
+    }
+  },
+  { _id: false }
+);
+
 const invitationSchema = new Schema(
   {
     memberId: {
@@ -69,6 +95,29 @@ const invitationSchema = new Schema(
     events: {
       type: [eventSchema],
       default: []
+    },
+    mainPhotoUrl: {
+      type: String,
+      default: ""
+    },
+    galleryPhotoUrls: {
+      type: [String],
+      default: []
+    },
+    themeId: {
+      type: Schema.Types.ObjectId,
+      ref: "Theme",
+      default: null
+    },
+    musicId: {
+      type: Schema.Types.ObjectId,
+      ref: "Music",
+      default: null
+    },
+    envelope: {
+      isEnabled: { type: Boolean, default: false },
+      methods: { type: [envelopeMethodSchema], default: [] },
+      updatedAfterLockAt: { type: Date, default: null }
     },
     publishedAt: {
       type: Date,
