@@ -6,6 +6,18 @@ import {
   readMemberNotification
 } from "../controllers/memberController.js";
 import {
+  memberBulkCreateGuests,
+  memberCreateGuest,
+  memberDeleteGuest,
+  memberDeleteWish,
+  memberGuestWhatsappMessage,
+  memberGuests,
+  memberHideWish,
+  memberMarkGuestSent,
+  memberUpdateGuest,
+  memberWishes
+} from "../controllers/guestController.js";
+import {
   memberCreateInvitation,
   memberDeleteInvitation,
   memberDeleteGalleryPhoto,
@@ -45,6 +57,13 @@ memberRoutes.patch("/invitations/:id", memberUpdateInvitation);
 memberRoutes.delete("/invitations/:id", memberDeleteInvitation);
 memberRoutes.post("/invitations/:id/preview", memberPreviewInvitation);
 memberRoutes.post("/invitations/:id/publish", memberPublishInvitation);
+memberRoutes.get("/invitations/:id/guests", memberGuests);
+memberRoutes.post("/invitations/:id/guests", memberCreateGuest);
+memberRoutes.post("/invitations/:id/guests/bulk", memberBulkCreateGuests);
+memberRoutes.patch("/invitations/:id/guests/:guestId", memberUpdateGuest);
+memberRoutes.delete("/invitations/:id/guests/:guestId", memberDeleteGuest);
+memberRoutes.post("/invitations/:id/guests/:guestId/mark-sent", memberMarkGuestSent);
+memberRoutes.get("/invitations/:id/guests/:guestId/whatsapp-message", memberGuestWhatsappMessage);
 memberRoutes.post(
   "/invitations/:id/photos/main",
   invitationPhotoUpload.single("photo"),
@@ -56,6 +75,9 @@ memberRoutes.post(
   memberUploadGalleryPhoto
 );
 memberRoutes.delete("/invitations/:id/photos/gallery/:photoId", memberDeleteGalleryPhoto);
+memberRoutes.get("/invitations/:id/wishes", memberWishes);
+memberRoutes.patch("/invitations/:id/wishes/:wishId/hide", memberHideWish);
+memberRoutes.delete("/invitations/:id/wishes/:wishId", memberDeleteWish);
 memberRoutes.get("/notifications", memberNotifications);
 memberRoutes.patch("/notifications/:id/read", readMemberNotification);
 memberRoutes.post("/transactions", memberCreateTransaction);
