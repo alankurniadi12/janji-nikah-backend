@@ -8,10 +8,13 @@ import {
 import {
   memberCreateInvitation,
   memberDeleteInvitation,
+  memberDeleteGalleryPhoto,
   memberInvitationDetail,
   memberInvitations,
   memberPreviewInvitation,
   memberPublishInvitation,
+  memberUploadGalleryPhoto,
+  memberUploadMainPhoto,
   memberUpdateInvitation
 } from "../controllers/invitationController.js";
 import {
@@ -21,12 +24,17 @@ import {
   memberUploadPaymentProof
 } from "../controllers/transactionController.js";
 import { authenticate, requireRole } from "../middlewares/authMiddleware.js";
-import { createImageUpload, resolveUploadPath } from "../middlewares/upload.js";
+import {
+  createImageUpload,
+  createMemoryImageUpload,
+  resolveUploadPath
+} from "../middlewares/upload.js";
 
 export const memberRoutes = Router();
 const paymentProofUpload = createImageUpload((req) =>
   resolveUploadPath("transactions", req.user._id.toString(), "proofs")
 );
+const invitationPhotoUpload = createMemoryImageUpload();
 
 memberRoutes.use(authenticate, requireRole("member"));
 memberRoutes.get("/dashboard", memberDashboard);
@@ -37,6 +45,17 @@ memberRoutes.patch("/invitations/:id", memberUpdateInvitation);
 memberRoutes.delete("/invitations/:id", memberDeleteInvitation);
 memberRoutes.post("/invitations/:id/preview", memberPreviewInvitation);
 memberRoutes.post("/invitations/:id/publish", memberPublishInvitation);
+memberRoutes.post(
+  "/invitations/:id/photos/main",
+  invitationPhotoUpload.single("photo"),
+  memberUploadMainPhoto
+);
+memberRoutes.post(
+  "/invitations/:id/photos/gallery",
+  invitationPhotoUpload.single("photo"),
+  memberUploadGalleryPhoto
+);
+memberRoutes.delete("/invitations/:id/photos/gallery/:photoId", memberDeleteGalleryPhoto);
 memberRoutes.get("/notifications", memberNotifications);
 memberRoutes.patch("/notifications/:id/read", readMemberNotification);
 memberRoutes.post("/transactions", memberCreateTransaction);

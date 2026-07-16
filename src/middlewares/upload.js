@@ -54,6 +54,23 @@ export function createImageUpload(destinationResolver) {
   });
 }
 
+export function createMemoryImageUpload() {
+  return multer({
+    storage: multer.memoryStorage(),
+    limits: {
+      fileSize: env.maxImageSizeMb * 1024 * 1024
+    },
+    fileFilter(req, file, cb) {
+      if (!allowedImages.has(file.mimetype)) {
+        cb(new AppError(400, "Format gambar harus JPG, PNG, atau WebP."));
+        return;
+      }
+
+      cb(null, true);
+    }
+  });
+}
+
 export function resolveUploadPath(...segments) {
   return path.join(env.uploadDir, ...segments);
 }
