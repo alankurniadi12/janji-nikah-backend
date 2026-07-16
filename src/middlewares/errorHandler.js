@@ -17,6 +17,10 @@ function normalizeError(error) {
     });
   }
 
+  if (error.name === "CastError") {
+    return new AppError(400, "Format ID tidak valid.");
+  }
+
   return new AppError(500, "Terjadi kesalahan pada server.");
 }
 

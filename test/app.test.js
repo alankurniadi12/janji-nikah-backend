@@ -60,3 +60,19 @@ test("auth routes return predictable validation errors", async () => {
     assert.equal(meBody.message, "Akses membutuhkan token.");
   });
 });
+
+test("dashboard routes require authentication", async () => {
+  await withTestServer(async (baseUrl) => {
+    const memberResponse = await fetch(`${baseUrl}/api/member/dashboard`);
+    const memberBody = await memberResponse.json();
+
+    assert.equal(memberResponse.status, 401);
+    assert.equal(memberBody.message, "Akses membutuhkan token.");
+
+    const adminResponse = await fetch(`${baseUrl}/api/admin/dashboard`);
+    const adminBody = await adminResponse.json();
+
+    assert.equal(adminResponse.status, 401);
+    assert.equal(adminBody.message, "Akses membutuhkan token.");
+  });
+});
