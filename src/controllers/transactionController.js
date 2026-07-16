@@ -1,0 +1,108 @@
+import {
+  approveTransaction,
+  attachPaymentProof,
+  createMemberTransaction,
+  getAdminTransaction,
+  getMemberTransaction,
+  listAdminTransactions,
+  listMemberTransactions,
+  rejectTransaction
+} from "../services/transactionService.js";
+import { asyncHandler } from "../utils/asyncHandler.js";
+import { toUploadUrl } from "../utils/fileUrl.js";
+
+export const memberCreateTransaction = asyncHandler(async (req, res) => {
+  const transaction = await createMemberTransaction(req.user, req.body.packageId);
+
+  res.status(201).json({
+    success: true,
+    data: {
+      transaction
+    }
+  });
+});
+
+export const memberTransactions = asyncHandler(async (req, res) => {
+  const transactions = await listMemberTransactions(req.user);
+
+  res.json({
+    success: true,
+    data: {
+      transactions
+    }
+  });
+});
+
+export const memberTransactionDetail = asyncHandler(async (req, res) => {
+  const transaction = await getMemberTransaction(req.user, req.params.id);
+
+  res.json({
+    success: true,
+    data: {
+      transaction
+    }
+  });
+});
+
+export const memberUploadPaymentProof = asyncHandler(async (req, res) => {
+  if (!req.file) {
+    res.status(400).json({
+      success: false,
+      message: "Bukti pembayaran wajib diunggah."
+    });
+    return;
+  }
+
+  const transaction = await attachPaymentProof(req.user, req.params.id, toUploadUrl(req.file.path));
+
+  res.json({
+    success: true,
+    data: {
+      transaction
+    }
+  });
+});
+
+export const adminTransactions = asyncHandler(async (req, res) => {
+  const transactions = await listAdminTransactions({ status: req.query.status });
+
+  res.json({
+    success: true,
+    data: {
+      transactions
+    }
+  });
+});
+
+export const adminTransactionDetail = asyncHandler(async (req, res) => {
+  const transaction = await getAdminTransaction(req.params.id);
+
+  res.json({
+    success: true,
+    data: {
+      transaction
+    }
+  });
+});
+
+export const adminApproveTransaction = asyncHandler(async (req, res) => {
+  const transaction = await approveTransaction(req.user, req.params.id, req.body.adminNote || "");
+
+  res.json({
+    success: true,
+    data: {
+      transaction
+    }
+  });
+});
+
+export const adminRejectTransaction = asyncHandler(async (req, res) => {
+  const transaction = await rejectTransaction(req.user, req.params.id, req.body.adminNote || "");
+
+  res.json({
+    success: true,
+    data: {
+      transaction
+    }
+  });
+});

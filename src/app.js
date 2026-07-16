@@ -6,6 +6,7 @@ import helmet from "helmet";
 import morgan from "morgan";
 
 import { env } from "./config/env.js";
+import { ensureDirectory } from "./middlewares/upload.js";
 import { errorHandler } from "./middlewares/errorHandler.js";
 import { notFoundHandler } from "./middlewares/notFoundHandler.js";
 import { apiRoutes } from "./routes/index.js";
@@ -38,6 +39,8 @@ export function createApp() {
     app.use(morgan(env.nodeEnv === "production" ? "combined" : "dev"));
   }
 
+  ensureDirectory(env.uploadDir);
+  app.use("/uploads", express.static(env.uploadDir, { index: false }));
   app.use("/api", apiRoutes);
   app.use(notFoundHandler);
   app.use(errorHandler);

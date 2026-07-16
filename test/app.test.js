@@ -76,3 +76,19 @@ test("dashboard routes require authentication", async () => {
     assert.equal(adminBody.message, "Akses membutuhkan token.");
   });
 });
+
+test("phase 4 payment routes protect member and admin operations", async () => {
+  await withTestServer(async (baseUrl) => {
+    const memberTransactionsResponse = await fetch(`${baseUrl}/api/member/transactions`);
+    const memberTransactionsBody = await memberTransactionsResponse.json();
+
+    assert.equal(memberTransactionsResponse.status, 401);
+    assert.equal(memberTransactionsBody.message, "Akses membutuhkan token.");
+
+    const adminTransactionsResponse = await fetch(`${baseUrl}/api/admin/transactions`);
+    const adminTransactionsBody = await adminTransactionsResponse.json();
+
+    assert.equal(adminTransactionsResponse.status, 401);
+    assert.equal(adminTransactionsBody.message, "Akses membutuhkan token.");
+  });
+});
