@@ -36,3 +36,27 @@ test("app foundation exposes health and predictable 404 responses", async () => 
     assert.equal(notFoundBody.message, "Endpoint tidak ditemukan.");
   });
 });
+
+test("auth routes return predictable validation errors", async () => {
+  await withTestServer(async (baseUrl) => {
+    const googleResponse = await fetch(`${baseUrl}/api/auth/google`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json"
+      },
+      body: JSON.stringify({})
+    });
+    const googleBody = await googleResponse.json();
+
+    assert.equal(googleResponse.status, 400);
+    assert.equal(googleBody.success, false);
+    assert.equal(googleBody.message, "Google ID token wajib dikirim.");
+
+    const meResponse = await fetch(`${baseUrl}/api/auth/me`);
+    const meBody = await meResponse.json();
+
+    assert.equal(meResponse.status, 401);
+    assert.equal(meBody.success, false);
+    assert.equal(meBody.message, "Akses membutuhkan token.");
+  });
+});
