@@ -4,6 +4,7 @@ import {
   getMemberInvitation,
   listMemberInvitations,
   previewMemberInvitation,
+  publishMemberInvitation,
   updateMemberInvitation
 } from "../services/invitationService.js";
 import {
@@ -11,7 +12,6 @@ import {
   deleteGalleryPhoto,
   replaceMainPhoto
 } from "../services/invitationPhotoService.js";
-import { AppError } from "../utils/AppError.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 
 export const memberInvitations = asyncHandler(async (req, res) => {
@@ -76,8 +76,15 @@ export const memberPreviewInvitation = asyncHandler(async (req, res) => {
   });
 });
 
-export const memberPublishInvitation = asyncHandler(async () => {
-  throw new AppError(501, "Publish undangan akan diaktifkan pada Phase 6.");
+export const memberPublishInvitation = asyncHandler(async (req, res) => {
+  const invitation = await publishMemberInvitation(req.user, req.params.id);
+
+  res.json({
+    success: true,
+    data: {
+      invitation
+    }
+  });
 });
 
 export const memberUploadMainPhoto = asyncHandler(async (req, res) => {

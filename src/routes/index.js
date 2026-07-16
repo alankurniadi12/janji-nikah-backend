@@ -5,6 +5,7 @@ import { authRoutes } from "./authRoutes.js";
 import { creditPackageRoutes } from "./creditPackageRoutes.js";
 import { healthRoutes } from "./healthRoutes.js";
 import { memberRoutes } from "./memberRoutes.js";
+import { publicInvitationRoutes } from "./publicInvitationRoutes.js";
 
 export const apiRoutes = Router();
 
@@ -13,3 +14,4 @@ apiRoutes.use("/auth", authRoutes);
 apiRoutes.use("/credit-packages", creditPackageRoutes);
 apiRoutes.use("/health", healthRoutes);
 apiRoutes.use("/member", memberRoutes);
+apiRoutes.use("/public", publicInvitationRoutes);

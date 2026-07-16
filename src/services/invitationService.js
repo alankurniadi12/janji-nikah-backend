@@ -1,8 +1,12 @@
 import Invitation from "../models/Invitation.js";
+import CreditLedger from "../models/CreditLedger.js";
+import User from "../models/User.js";
 import { AppError } from "../utils/AppError.js";
 import { createInvitationSlugBase, normalizeSlug } from "../utils/slug.js";
 
 const DRAFT_LIMIT = 3;
+const PUBLISH_CREDIT_COST = 1;
+const INVITATION_EXPIRE_AFTER_EVENT_DAYS = 5;
 
 export function toPublicInvitation(invitation) {
   return {
@@ -61,6 +65,7 @@ export async function createDraftInvitation(member, payload = {}) {
 }
 
 export async function getMemberInvitation(member, invitationId) {
+  await lockInvitationIfNeeded(invitationId, member._id);
   const invitation = await Invitation.findOne({ _id: invitationId, memberId: member._id }).lean();
 
   if (!invitation) {
@@ -129,6 +134,96 @@ export async function previewMemberInvitation(member, invitationId) {
     invitation: toPublicInvitation(invitation),
     previewUrl: `/${member.username}/${invitation.slug}?preview=true`
   };
+}
+
+export async function publishMemberInvitation(member, invitationId) {
+  const invitation = await Invitation.findOne({ _id: invitationId, memberId: member._id });
+
+  if (!invitation) {
+    throw new AppError(404, "Undangan tidak ditemukan.");
+  }
+
+  if (invitation.status !== "draft") {
+    throw new AppError(409, "Hanya draft undangan yang bisa dipublish.");
+  }
+
+  validateInvitationReadyToPublish(invitation);
+
+  const creditedMember = await User.findOneAndUpdate(
+    { _id: member._id, creditBalance: { $gte: PUBLISH_CREDIT_COST } },
+    { $inc: { creditBalance: -PUBLISH_CREDIT_COST } },
+    { new: true }
+  );
+
+  if (!creditedMember) {
+    throw new AppError(402, "Kredit tidak cukup untuk publish undangan.");
+  }
+
+  const latestEventDate = getLatestEventDate(invitation.events);
+  const publishedAt = new Date();
+  invitation.status = "active";
+  invitation.publishedAt = publishedAt;
+  invitation.expiresAt = addDays(latestEventDate, INVITATION_EXPIRE_AFTER_EVENT_DAYS);
+  invitation.summary = {
+    groomName: invitation.groom.fullName,
+    brideName: invitation.bride.fullName,
+    latestEventDate,
+    themeName: "",
+    publishedAt
+  };
+
+  try {
+    await invitation.save();
+    await CreditLedger.create({
+      memberId: member._id,
+      type: "publish",
+      amount: -PUBLISH_CREDIT_COST,
+      balanceAfter: creditedMember.creditBalance,
+      referenceType: "invitation",
+      referenceId: invitation._id,
+      note: "Publish undangan.",
+      createdBy: member._id
+    });
+  } catch (error) {
+    await User.updateOne({ _id: member._id }, { $inc: { creditBalance: PUBLISH_CREDIT_COST } });
+    await Invitation.updateOne(
+      { _id: invitation._id },
+      {
+        $set: {
+          status: "draft",
+          publishedAt: null,
+          expiresAt: null,
+          summary: {}
+        }
+      }
+    );
+    throw error;
+  }
+
+  return toPublicInvitation(invitation);
+}
+
+export async function lockInvitationIfNeeded(invitationId, memberId = null) {
+  if (!invitationId) {
+    return;
+  }
+
+  const query = {
+    _id: invitationId,
+    status: "active",
+    publishedAt: { $lte: new Date(Date.now() - 24 * 60 * 60 * 1000) }
+  };
+
+  if (memberId) {
+    query.memberId = memberId;
+  }
+
+  await Invitation.updateOne(query, {
+    $set: {
+      status: "locked",
+      lockedAt: new Date()
+    }
+  });
 }
 
 export async function createAvailableInvitationSlug(memberId, requestedSlug, excludedInvitationId = null) {
@@ -217,4 +312,41 @@ function normalizeEnvelope(envelope = {}) {
       accountHolder: method.accountHolder
     }))
   };
+}
+
+function validateInvitationReadyToPublish(invitation) {
+  const missingFields = [];
+
+  if (!invitation.groom?.fullName) missingFields.push("nama lengkap pengantin pria");
+  if (!invitation.groom?.parentsName) missingFields.push("nama orang tua pengantin pria");
+  if (!invitation.bride?.fullName) missingFields.push("nama lengkap pengantin wanita");
+  if (!invitation.bride?.parentsName) missingFields.push("nama orang tua pengantin wanita");
+  if (!invitation.mainPhotoUrl) missingFields.push("foto utama");
+
+  if (!Array.isArray(invitation.events) || invitation.events.length === 0) {
+    missingFields.push("minimal satu acara");
+  } else {
+    invitation.events.forEach((event, index) => {
+      if (!event.type) missingFields.push(`jenis acara ${index + 1}`);
+      if (!event.date) missingFields.push(`tanggal acara ${index + 1}`);
+      if (!event.startTime) missingFields.push(`jam mulai acara ${index + 1}`);
+      if (!event.address) missingFields.push(`alamat acara ${index + 1}`);
+    });
+  }
+
+  if (missingFields.length > 0) {
+    throw new AppError(400, `Lengkapi data sebelum publish: ${missingFields.join(", ")}.`);
+  }
+}
+
+function getLatestEventDate(events) {
+  return events
+    .map((event) => new Date(event.date))
+    .sort((left, right) => right.getTime() - left.getTime())[0];
+}
+
+function addDays(date, days) {
+  const result = new Date(date);
+  result.setDate(result.getDate() + days);
+  return result;
 }

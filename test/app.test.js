@@ -108,5 +108,13 @@ test("invitation builder routes require authentication", async () => {
 
     assert.equal(photoResponse.status, 401);
     assert.equal(photoBody.message, "Akses membutuhkan token.");
+
+    const publishResponse = await fetch(`${baseUrl}/api/member/invitations/id/publish`, {
+      method: "POST"
+    });
+    const publishBody = await publishResponse.json();
+
+    assert.equal(publishResponse.status, 401);
+    assert.equal(publishBody.message, "Akses membutuhkan token.");
   });
 });
