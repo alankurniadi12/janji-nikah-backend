@@ -6,6 +6,11 @@ import {
   readMemberNotification
 } from "../controllers/memberController.js";
 import {
+  memberBrandingProfile,
+  memberGenerateBranding,
+  memberUpsertBrandingProfile
+} from "../controllers/brandingController.js";
+import {
   memberBulkCreateGuests,
   memberCreateGuest,
   memberDeleteGuest,
@@ -49,6 +54,9 @@ const paymentProofUpload = createImageUpload((req) =>
 const invitationPhotoUpload = createMemoryImageUpload();
 
 memberRoutes.use(authenticate, requireRole("member"));
+memberRoutes.get("/branding", memberBrandingProfile);
+memberRoutes.put("/branding", memberUpsertBrandingProfile);
+memberRoutes.post("/branding/generate", memberGenerateBranding);
 memberRoutes.get("/dashboard", memberDashboard);
 memberRoutes.get("/invitations", memberInvitations);
 memberRoutes.post("/invitations", memberCreateInvitation);

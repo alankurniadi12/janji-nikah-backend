@@ -1,0 +1,309 @@
+import crypto from "node:crypto";
+import fs from "node:fs/promises";
+import path from "node:path";
+
+import sharp from "sharp";
+
+import BrandingProfile from "../models/BrandingProfile.js";
+import { ensureDirectory, resolveUploadPath } from "../middlewares/upload.js";
+import { AppError } from "../utils/AppError.js";
+import { toUploadUrl } from "../utils/fileUrl.js";
+
+const TEMPLATE_STYLES = {
+  elegant: {
+    background: "#F7F1EA",
+    panel: "#FFFFFF",
+    primary: "#7A3E4D",
+    accent: "#C79A64",
+    text: "#2F2527",
+    muted: "#75676A"
+  },
+  modern: {
+    background: "#EEF4F2",
+    panel: "#FFFFFF",
+    primary: "#1D5B55",
+    accent: "#D69B45",
+    text: "#1F2A29",
+    muted: "#65716F"
+  },
+  minimal: {
+    background: "#F4F4F0",
+    panel: "#FFFFFF",
+    primary: "#343434",
+    accent: "#8F6A42",
+    text: "#242424",
+    muted: "#696969"
+  }
+};
+
+export function normalizeBrandingName(value) {
+  return String(value || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+export function toPublicBrandingProfile(profile, warnings = []) {
+  if (!profile) {
+    return null;
+  }
+
+  return {
+    id: profile._id.toString(),
+    memberId: profile.memberId?.toString?.() || profile.memberId,
+    businessName: profile.businessName,
+    instagram: profile.instagram,
+    facebook: profile.facebook,
+    tiktok: profile.tiktok,
+    whatsapp: profile.whatsapp,
+    selectedTemplate: profile.selectedTemplate,
+    promoAssets: toPublicPromoAssets(profile.promoAssets),
+    warnings,
+    createdAt: profile.createdAt,
+    updatedAt: profile.updatedAt
+  };
+}
+
+export async function getBrandingProfile(member) {
+  const profile = await BrandingProfile.findOne({ memberId: member._id }).lean();
+  const warnings = profile ? await getBusinessNameWarnings(member, profile.businessName) : [];
+
+  return toPublicBrandingProfile(profile, warnings);
+}
+
+export async function upsertBrandingProfile(member, payload = {}) {
+  const normalizedPayload = normalizeBrandingPayload(payload);
+  const warnings = await getBusinessNameWarnings(member, normalizedPayload.businessName);
+
+  const profile = await BrandingProfile.findOneAndUpdate(
+    { memberId: member._id },
+    {
+      $set: {
+        ...normalizedPayload,
+        normalizedBusinessName: normalizeBrandingName(normalizedPayload.businessName)
+      },
+      $setOnInsert: {
+        memberId: member._id
+      }
+    },
+    { new: true, upsert: true, runValidators: true }
+  ).lean();
+
+  return toPublicBrandingProfile(profile, warnings);
+}
+
+export async function generateBrandingAssets(member, payload = {}) {
+  const profile = await BrandingProfile.findOne({ memberId: member._id });
+
+  if (!profile) {
+    throw new AppError(404, "Profil branding belum dibuat.");
+  }
+
+  const caption = generatePromoCaption(profile, payload);
+  const directory = resolveUploadPath("members", member._id.toString(), "branding");
+  const square = await generatePromoImage(profile, payload, directory, "square");
+  const story = await generatePromoImage(profile, payload, directory, "story");
+  const oldSquareImageUrl = profile.promoAssets?.squareImageUrl;
+  const oldStoryImageUrl = profile.promoAssets?.storyImageUrl;
+
+  profile.promoAssets = {
+    squareImageUrl: square.publicUrl,
+    storyImageUrl: story.publicUrl,
+    caption,
+    generatedAt: new Date()
+  };
+  await profile.save();
+  await deleteUploadByUrl(oldSquareImageUrl);
+  await deleteUploadByUrl(oldStoryImageUrl);
+
+  return {
+    profile: toPublicBrandingProfile(profile),
+    assets: toPublicPromoAssets(profile.promoAssets)
+  };
+}
+
+function toPublicPromoAssets(promoAssets = {}) {
+  return {
+    squareImageUrl: promoAssets.squareImageUrl || "",
+    storyImageUrl: promoAssets.storyImageUrl || "",
+    caption: promoAssets.caption || "",
+    generatedAt: promoAssets.generatedAt || null
+  };
+}
+
+export function generatePromoCaption(profile, payload = {}) {
+  const businessName = profile.businessName;
+  const whatsapp = profile.whatsapp ? `\n\nKonsultasi: ${profile.whatsapp}` : "";
+  const instagram = profile.instagram ? `\nInstagram: ${profile.instagram}` : "";
+  const offer = sanitizeShortText(payload.offer || "Undangan digital elegan untuk hari bahagiamu.");
+  const cta = sanitizeShortText(payload.cta || "Yuk buat undangan yang rapi, cantik, dan mudah dibagikan.");
+
+  return `${offer}\n\n${businessName} siap bantu kamu punya undangan pernikahan digital yang praktis untuk tamu, RSVP, ucapan, dan amplop digital.${whatsapp}${instagram}\n\n${cta}`;
+}
+
+async function getBusinessNameWarnings(member, businessName) {
+  const normalizedBusinessName = normalizeBrandingName(businessName);
+
+  if (!normalizedBusinessName) {
+    return [];
+  }
+
+  const duplicate = await BrandingProfile.exists({
+    memberId: { $ne: member._id },
+    normalizedBusinessName
+  });
+
+  return duplicate
+    ? [
+        {
+          code: "business_name_used",
+          message: "Nama bisnis ini sudah dipakai member lain. Kamu tetap bisa menyimpan, tapi sebaiknya pilih nama yang lebih unik."
+        }
+      ]
+    : [];
+}
+
+function normalizeBrandingPayload(payload) {
+  const businessName = sanitizeShortText(payload.businessName, 80);
+
+  if (!businessName) {
+    throw new AppError(400, "Nama bisnis wajib diisi.");
+  }
+
+  const selectedTemplate = payload.selectedTemplate || "elegant";
+
+  if (!Object.hasOwn(TEMPLATE_STYLES, selectedTemplate)) {
+    throw new AppError(400, "Template branding tidak valid.");
+  }
+
+  return {
+    businessName,
+    instagram: sanitizeShortText(payload.instagram, 120),
+    facebook: sanitizeShortText(payload.facebook, 120),
+    tiktok: sanitizeShortText(payload.tiktok, 120),
+    whatsapp: sanitizePhone(payload.whatsapp),
+    selectedTemplate
+  };
+}
+
+async function generatePromoImage(profile, payload, directory, format) {
+  ensureDirectory(directory);
+
+  const dimensions = format === "story" ? { width: 1080, height: 1920 } : { width: 1080, height: 1080 };
+  const filePath = path.join(directory, `${format}-${crypto.randomUUID()}.webp`);
+  const svg = renderPromoSvg(profile, payload, dimensions, format);
+
+  await sharp(Buffer.from(svg)).webp({ quality: 90 }).toFile(filePath);
+
+  return {
+    filePath,
+    publicUrl: toUploadUrl(filePath)
+  };
+}
+
+export function renderPromoSvg(profile, payload, dimensions, format) {
+  const style = TEMPLATE_STYLES[profile.selectedTemplate] || TEMPLATE_STYLES.elegant;
+  const { width, height } = dimensions;
+  const isStory = format === "story";
+  const contentWidth = width - 160;
+  const title = sanitizeShortText(payload.headline || "Undangan Digital Pernikahan", 80);
+  const subtitle = sanitizeShortText(payload.subheadline || "Cantik, praktis, dan siap dibagikan ke semua tamu.", 130);
+  const contact = profile.whatsapp || profile.instagram || profile.tiktok || profile.facebook || "Hubungi kami";
+  const titleLines = wrapText(title, isStory ? 21 : 18, 3);
+  const subtitleLines = wrapText(subtitle, isStory ? 34 : 28, 4);
+  const yStart = isStory ? 500 : 270;
+
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<svg width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" xmlns="http://www.w3.org/2000/svg">
+  <rect width="${width}" height="${height}" fill="${style.background}"/>
+  <circle cx="${width - 110}" cy="120" r="180" fill="${style.accent}" opacity="0.22"/>
+  <circle cx="85" cy="${height - 90}" r="210" fill="${style.primary}" opacity="0.10"/>
+  <rect x="80" y="${isStory ? 180 : 110}" width="${contentWidth}" height="${isStory ? 1560 : 860}" rx="42" fill="${style.panel}"/>
+  <path d="M170 ${isStory ? 310 : 220} C310 ${isStory ? 210 : 120}, 430 ${isStory ? 410 : 300}, 560 ${isStory ? 290 : 190} S820 ${isStory ? 220 : 150}, 910 ${isStory ? 330 : 240}" fill="none" stroke="${style.accent}" stroke-width="7" stroke-linecap="round" opacity="0.75"/>
+  <text x="140" y="${yStart}" font-family="Arial, sans-serif" font-size="34" fill="${style.accent}" font-weight="700" letter-spacing="4">${escapeXml(profile.businessName.toUpperCase())}</text>
+  ${renderTextLines(titleLines, 140, yStart + 115, isStory ? 82 : 76, 88, style.primary, 800)}
+  ${renderTextLines(subtitleLines, 140, yStart + (titleLines.length * 88) + 95, isStory ? 38 : 34, 48, style.muted, 400)}
+  <rect x="140" y="${height - (isStory ? 410 : 260)}" width="${contentWidth - 120}" height="${isStory ? 190 : 145}" rx="28" fill="${style.primary}"/>
+  <text x="180" y="${height - (isStory ? 325 : 175)}" font-family="Arial, sans-serif" font-size="${isStory ? 42 : 36}" fill="#FFFFFF" font-weight="700">${escapeXml(contact)}</text>
+  <text x="180" y="${height - (isStory ? 265 : 125)}" font-family="Arial, sans-serif" font-size="${isStory ? 30 : 26}" fill="#FFFFFF" opacity="0.82">Konsultasi undangan digital</text>
+  <text x="140" y="${height - 90}" font-family="Arial, sans-serif" font-size="24" fill="${style.text}" opacity="0.55">Janji Nikah Partner</text>
+</svg>`;
+}
+
+function renderTextLines(lines, x, y, fontSize, lineHeight, fill, weight) {
+  return lines
+    .map(
+      (line, index) =>
+        `<text x="${x}" y="${y + index * lineHeight}" font-family="Arial, sans-serif" font-size="${fontSize}" fill="${fill}" font-weight="${weight}">${escapeXml(line)}</text>`
+    )
+    .join("\n  ");
+}
+
+function wrapText(value, maxCharacters, maxLines) {
+  const words = String(value || "").split(/\s+/).filter(Boolean);
+  const lines = [];
+  let current = "";
+
+  for (const word of words) {
+    const next = current ? `${current} ${word}` : word;
+
+    if (next.length > maxCharacters && current) {
+      lines.push(current);
+      current = word;
+    } else {
+      current = next;
+    }
+
+    if (lines.length === maxLines) break;
+  }
+
+  if (current && lines.length < maxLines) {
+    lines.push(current);
+  }
+
+  return lines;
+}
+
+function sanitizeShortText(value, maxLength = 160) {
+  return String(value || "")
+    .replace(/<script[\s\S]*?>[\s\S]*?<\/script>/gi, "")
+    .replace(/[<>]/g, "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, maxLength);
+}
+
+function sanitizePhone(value) {
+  return String(value || "")
+    .replace(/[^\d+\s-]/g, "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 30);
+}
+
+function escapeXml(value) {
+  return String(value)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&apos;");
+}
+
+async function deleteUploadByUrl(publicUrl) {
+  if (!publicUrl?.startsWith("/uploads/")) {
+    return;
+  }
+
+  const relativePath = publicUrl.replace(/^\/uploads\//, "");
+  const filePath = path.join(resolveUploadPath(), relativePath);
+
+  try {
+    await fs.unlink(filePath);
+  } catch (error) {
+    if (error.code !== "ENOENT") {
+      throw error;
+    }
+  }
+}

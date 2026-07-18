@@ -77,6 +77,24 @@ test("dashboard routes require authentication", async () => {
   });
 });
 
+test("branding routes require authentication", async () => {
+  await withTestServer(async (baseUrl) => {
+    const profileResponse = await fetch(`${baseUrl}/api/member/branding`);
+    const profileBody = await profileResponse.json();
+
+    assert.equal(profileResponse.status, 401);
+    assert.equal(profileBody.message, "Akses membutuhkan token.");
+
+    const generateResponse = await fetch(`${baseUrl}/api/member/branding/generate`, {
+      method: "POST"
+    });
+    const generateBody = await generateResponse.json();
+
+    assert.equal(generateResponse.status, 401);
+    assert.equal(generateBody.message, "Akses membutuhkan token.");
+  });
+});
+
 test("admin management routes require authentication", async () => {
   await withTestServer(async (baseUrl) => {
     const membersResponse = await fetch(`${baseUrl}/api/admin/members`);
