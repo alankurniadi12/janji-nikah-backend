@@ -16,6 +16,19 @@ test("creates date range filter for reports", () => {
   assert.equal(filter.approvedAt.$lte.toISOString(), "2026-07-31T23:59:59.999Z");
 });
 
+test("includes the full end date for date picker values", () => {
+  const filter = createDateRangeFilter(
+    {
+      startDate: "2026-07-18",
+      endDate: "2026-07-18"
+    },
+    "approvedAt"
+  );
+
+  assert.equal(filter.approvedAt.$gte.toISOString(), "2026-07-18T00:00:00.000Z");
+  assert.equal(filter.approvedAt.$lte.toISOString(), "2026-07-18T23:59:59.999Z");
+});
+
 test("ignores invalid report dates", () => {
   const filter = createDateRangeFilter({ startDate: "bukan-tanggal" }, "createdAt");
 

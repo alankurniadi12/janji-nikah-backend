@@ -5,8 +5,8 @@ import Transaction from "../models/Transaction.js";
 
 export function createDateRangeFilter({ startDate, endDate } = {}, field = "createdAt") {
   const filter = {};
-  const start = parseDate(startDate);
-  const end = parseDate(endDate);
+  const start = parseDate(startDate, "start");
+  const end = parseDate(endDate, "end");
 
   if (start && end && start > end) {
     return { [field]: { $gte: end, $lte: start } };
@@ -138,8 +138,8 @@ function emptyCreditMetric() {
 }
 
 function normalizeRange(query = {}) {
-  const start = parseDate(query.startDate);
-  const end = parseDate(query.endDate);
+  const start = parseDate(query.startDate, "start");
+  const end = parseDate(query.endDate, "end");
 
   return {
     startDate: start?.toISOString() || null,
@@ -147,7 +147,7 @@ function normalizeRange(query = {}) {
   };
 }
 
-function parseDate(value) {
+function parseDate(value, boundary = "start") {
   if (!value) {
     return null;
   }
@@ -158,5 +158,13 @@ function parseDate(value) {
     return null;
   }
 
+  if (isDateOnly(value) && boundary === "end") {
+    date.setUTCHours(23, 59, 59, 999);
+  }
+
   return date;
+}
+
+function isDateOnly(value) {
+  return typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value);
 }
