@@ -111,6 +111,28 @@ test("admin management routes require authentication", async () => {
   });
 });
 
+test("admin report routes require authentication", async () => {
+  await withTestServer(async (baseUrl) => {
+    const revenueResponse = await fetch(`${baseUrl}/api/admin/reports/revenue`);
+    const revenueBody = await revenueResponse.json();
+
+    assert.equal(revenueResponse.status, 401);
+    assert.equal(revenueBody.message, "Akses membutuhkan token.");
+
+    const creditResponse = await fetch(`${baseUrl}/api/admin/reports/credits`);
+    const creditBody = await creditResponse.json();
+
+    assert.equal(creditResponse.status, 401);
+    assert.equal(creditBody.message, "Akses membutuhkan token.");
+
+    const themeResponse = await fetch(`${baseUrl}/api/admin/reports/themes`);
+    const themeBody = await themeResponse.json();
+
+    assert.equal(themeResponse.status, 401);
+    assert.equal(themeBody.message, "Akses membutuhkan token.");
+  });
+});
+
 test("phase 4 payment routes protect member and admin operations", async () => {
   await withTestServer(async (baseUrl) => {
     const memberTransactionsResponse = await fetch(`${baseUrl}/api/member/transactions`);

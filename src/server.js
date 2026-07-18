@@ -1,6 +1,7 @@
 import { createApp } from "./app.js";
 import { connectDatabase, disconnectDatabase } from "./config/database.js";
 import { env } from "./config/env.js";
+import { startExpiredInvitationCleanupJob } from "./jobs/expiredInvitationCleanupJob.js";
 
 async function startServer() {
   await connectDatabase();
@@ -9,9 +10,13 @@ async function startServer() {
   const server = app.listen(env.port, () => {
     console.log(`Janji Nikah API running on port ${env.port}`);
   });
+  const cleanupTimer = startExpiredInvitationCleanupJob();
 
   const shutdown = async (signal) => {
     console.log(`${signal} received. Shutting down Janji Nikah API.`);
+    if (cleanupTimer) {
+      clearInterval(cleanupTimer);
+    }
     server.close(async () => {
       await disconnectDatabase();
       process.exit(0);

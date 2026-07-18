@@ -8,6 +8,9 @@ import {
   adminInvitations,
   adminMemberDetail,
   adminMembers,
+  adminCreditReport,
+  adminRevenueReport,
+  adminThemeUsageReport,
   adminUnlockInvitation,
   adminUpdateMemberStatus
 } from "../controllers/adminController.js";
@@ -62,4 +65,7 @@ adminRoutes.patch("/music/:id/status", adminSetMusicStatus);
 adminRoutes.get("/invitations", adminInvitations);
 adminRoutes.get("/invitations/:id", adminInvitationDetail);
 adminRoutes.post("/invitations/:id/unlock", adminUnlockInvitation);
+adminRoutes.get("/reports/revenue", adminRevenueReport);
+adminRoutes.get("/reports/credits", adminCreditReport);
+adminRoutes.get("/reports/themes", adminThemeUsageReport);
 adminRoutes.get("/audit-logs", adminAuditLogs);

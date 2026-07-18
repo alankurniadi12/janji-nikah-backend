@@ -40,6 +40,7 @@ function readEnv() {
     maxImageSizeMb: toInteger(process.env.MAX_IMAGE_SIZE_MB, 5),
     imageMaxWidth: toInteger(process.env.IMAGE_MAX_WIDTH, 1600),
     imageQuality: toInteger(process.env.IMAGE_QUALITY, 85),
+    cleanupIntervalMs: toInteger(process.env.CLEANUP_INTERVAL_MS, 6 * 60 * 60 * 1000),
     adminEmail: process.env.ADMIN_EMAIL || "",
     adminName: process.env.ADMIN_NAME || "Admin Janji Nikah"
   };

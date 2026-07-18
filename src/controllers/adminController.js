@@ -1,5 +1,10 @@
 import { getAdminDashboard } from "../services/dashboardService.js";
 import {
+  getCreditReport,
+  getRevenueReport,
+  getThemeUsageReport
+} from "../services/reportService.js";
+import {
   adjustMemberCredits,
   getAdminInvitation,
   getMemberDetail,
@@ -58,4 +63,19 @@ export const adminUnlockInvitation = asyncHandler(async (req, res) => {
 export const adminAuditLogs = asyncHandler(async (req, res) => {
   const auditLogs = await listAuditLogs();
   res.json({ success: true, data: { auditLogs } });
+});
+
+export const adminRevenueReport = asyncHandler(async (req, res) => {
+  const report = await getRevenueReport(req.query);
+  res.json({ success: true, data: { report } });
+});
+
+export const adminCreditReport = asyncHandler(async (req, res) => {
+  const report = await getCreditReport(req.query);
+  res.json({ success: true, data: { report } });
+});
+
+export const adminThemeUsageReport = asyncHandler(async (req, res) => {
+  const report = await getThemeUsageReport(req.query);
+  res.json({ success: true, data: { report } });
 });
