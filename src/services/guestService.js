@@ -1,5 +1,6 @@
 import crypto from "node:crypto";
 
+import { env } from "../config/env.js";
 import Guest from "../models/Guest.js";
 import Invitation from "../models/Invitation.js";
 import RSVP from "../models/RSVP.js";
@@ -151,7 +152,7 @@ export async function getGuestWhatsappMessage(member, invitationId, guestId) {
     throw new AppError(404, "Tamu tidak ditemukan.");
   }
 
-  const link = `/${member.username}/${invitation.slug}/guest/${guest.token}`;
+  const link = new URL(`/${member.username}/${invitation.slug}/guest/${guest.token}`, env.appUrl).toString();
   return {
     guest: toPublicGuest(guest, invitation, member),
     message: `Assalamu'alaikum ${guest.name},\n\nKami mengundang Anda untuk hadir di acara pernikahan ${invitation.groom.fullName} & ${invitation.bride.fullName}.\n\nBuka undangan:\n${link}`
