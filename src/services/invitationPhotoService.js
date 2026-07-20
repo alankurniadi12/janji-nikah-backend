@@ -8,7 +8,7 @@ import { env } from "../config/env.js";
 import { ensureDirectory, resolveUploadPath } from "../middlewares/upload.js";
 import Invitation from "../models/Invitation.js";
 import { AppError } from "../utils/AppError.js";
-import { toUploadUrl } from "../utils/fileUrl.js";
+import { toRelativeUploadUrl, toUploadUrl } from "../utils/fileUrl.js";
 import { toPublicInvitation } from "./invitationService.js";
 
 const GALLERY_LIMIT = 5;
@@ -125,11 +125,13 @@ async function processAndStoreImage(file, directory) {
 }
 
 async function deleteUploadByUrl(publicUrl) {
-  if (!publicUrl?.startsWith("/uploads/")) {
+  const relativeUrl = toRelativeUploadUrl(publicUrl);
+
+  if (!relativeUrl?.startsWith("/uploads/")) {
     return;
   }
 
-  const relativePath = publicUrl.replace(/^\/uploads\//, "");
+  const relativePath = relativeUrl.replace(/^\/uploads\//, "");
   const filePath = path.join(env.uploadDir, relativePath);
 
   try {

@@ -2,6 +2,7 @@ import Invitation from "../models/Invitation.js";
 import CreditLedger from "../models/CreditLedger.js";
 import User from "../models/User.js";
 import { AppError } from "../utils/AppError.js";
+import { toAbsoluteUploadUrl } from "../utils/fileUrl.js";
 import { createInvitationSlugBase, normalizeSlug } from "../utils/slug.js";
 
 const DRAFT_LIMIT = 3;
@@ -14,12 +15,12 @@ export function toPublicInvitation(invitation) {
     memberId: invitation.memberId?.toString?.() || invitation.memberId,
     status: invitation.status,
     slug: invitation.slug,
-    title: invitation.title,
+    title: invitation.title || createInvitationTitle(invitation.groom?.fullName, invitation.bride?.fullName),
     groom: invitation.groom,
     bride: invitation.bride,
     events: invitation.events,
-    mainPhotoUrl: invitation.mainPhotoUrl,
-    galleryPhotoUrls: invitation.galleryPhotoUrls,
+    mainPhotoUrl: toAbsoluteUploadUrl(invitation.mainPhotoUrl),
+    galleryPhotoUrls: (invitation.galleryPhotoUrls || []).map(toAbsoluteUploadUrl),
     themeId: invitation.themeId?.toString?.() || null,
     musicId: invitation.musicId?.toString?.() || null,
     envelope: invitation.envelope,
@@ -54,7 +55,7 @@ export async function createDraftInvitation(member, payload = {}) {
     memberId: member._id,
     status: "draft",
     slug,
-    title: payload.title || "",
+    title: createInvitationTitle(groomName, brideName),
     groom: normalizeCouple(payload.groom),
     bride: normalizeCouple(payload.bride),
     events: normalizeEvents(payload.events),
@@ -84,9 +85,11 @@ export async function updateMemberInvitation(member, invitationId, payload) {
 
   assertMainDataEditable(invitation);
 
-  if (payload.title !== undefined) invitation.title = payload.title;
   if (payload.groom !== undefined) invitation.groom = mergeCouple(invitation.groom, payload.groom);
   if (payload.bride !== undefined) invitation.bride = mergeCouple(invitation.bride, payload.bride);
+  if (payload.title !== undefined || payload.groom !== undefined || payload.bride !== undefined) {
+    invitation.title = createInvitationTitle(invitation.groom.fullName, invitation.bride.fullName);
+  }
   if (payload.events !== undefined) invitation.events = normalizeEvents(payload.events);
   if (payload.themeId !== undefined) invitation.themeId = payload.themeId || null;
   if (payload.musicId !== undefined) invitation.musicId = payload.musicId || null;
@@ -265,6 +268,17 @@ function assertMainDataEditable(invitation) {
 
 function shouldRefreshDraftSlug(payload) {
   return payload.groom?.fullName !== undefined || payload.bride?.fullName !== undefined;
+}
+
+function createInvitationTitle(groomName, brideName) {
+  const groom = groomName?.trim();
+  const bride = brideName?.trim();
+
+  if (groom && bride) {
+    return `${groom} & ${bride}`;
+  }
+
+  return groom || bride || "Draft undangan";
 }
 
 function normalizeCouple(couple = {}) {

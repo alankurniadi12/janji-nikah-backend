@@ -16,6 +16,7 @@ function toInteger(value, fallback) {
 function readEnv() {
   const nodeEnv = process.env.NODE_ENV || "development";
   const isTest = nodeEnv === "test";
+  const port = toInteger(process.env.PORT, 5000);
   const missingKeys = requiredKeys.filter((key) => !process.env[key]);
 
   if (missingKeys.length > 0 && !isTest) {
@@ -24,10 +25,10 @@ function readEnv() {
 
   return {
     nodeEnv,
-    port: toInteger(process.env.PORT, 5000),
+    port,
     mongoUri: process.env.MONGODB_URI || "mongodb://127.0.0.1:27017/janji-nikah-test",
     appUrl: process.env.APP_URL || "http://localhost:5173",
-    apiUrl: process.env.API_URL || "http://localhost:5000",
+    apiUrl: process.env.API_URL || `http://localhost:${port}`,
     jwtSecret: process.env.JWT_SECRET || "test_jwt_secret",
     jwtAccessExpiresIn: process.env.JWT_ACCESS_EXPIRES_IN || "15m",
     jwtRefreshExpiresIn: process.env.JWT_REFRESH_EXPIRES_IN || "7d",
