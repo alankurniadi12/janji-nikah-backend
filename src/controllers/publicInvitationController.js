@@ -2,7 +2,9 @@ import { getPublicInvitation } from "../services/publicInvitationService.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 
 export const publicInvitationDetail = asyncHandler(async (req, res) => {
-  const invitation = await getPublicInvitation(req.params.username, req.params.slug);
+  const invitation = await getPublicInvitation(req.params.username, req.params.slug, {
+    preview: req.query.preview === "true"
+  });
 
   res.json({
     success: true,

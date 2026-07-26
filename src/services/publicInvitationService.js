@@ -3,7 +3,7 @@ import User from "../models/User.js";
 import { AppError } from "../utils/AppError.js";
 import { lockInvitationIfNeeded, toPublicInvitation } from "./invitationService.js";
 
-export async function getPublicInvitation(username, slug) {
+export async function getPublicInvitation(username, slug, options = {}) {
   const user = await User.findOne({
     $or: [{ username }, { usernameHistory: username }],
     role: "member"
@@ -40,6 +40,15 @@ export async function getPublicInvitation(username, slug) {
         status: "expired",
         summary: invitation.summary
       }
+    };
+  }
+
+  if (options.preview) {
+    return {
+      isActive: false,
+      isPreview: true,
+      redirectUsername,
+      invitation: toPublicInvitation(invitation)
     };
   }
 
