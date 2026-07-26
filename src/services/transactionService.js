@@ -8,6 +8,21 @@ import { calculateTotalAmount, createUniquePaymentCode } from "../utils/money.js
 
 const TRANSACTION_EXPIRY_MS = 24 * 60 * 60 * 1000;
 
+export async function expirePendingTransactions(filter = {}) {
+  await Transaction.updateMany(
+    {
+      ...filter,
+      status: "waiting_payment",
+      expiresAt: { $lte: new Date() }
+    },
+    {
+      $set: {
+        status: "expired"
+      }
+    }
+  );
+}
+
 export function toPublicTransaction(transaction) {
   return {
     id: transaction._id.toString(),
@@ -57,11 +72,15 @@ export async function createMemberTransaction(member, packageId) {
 }
 
 export async function listMemberTransactions(member) {
+  await expirePendingTransactions({ memberId: member._id });
+
   const transactions = await Transaction.find({ memberId: member._id }).sort({ createdAt: -1 }).lean();
   return transactions.map(toPublicTransaction);
 }
 
 export async function getMemberTransaction(member, transactionId) {
+  await expirePendingTransactions({ _id: transactionId, memberId: member._id });
+
   const transaction = await Transaction.findOne({ _id: transactionId, memberId: member._id }).lean();
 
   if (!transaction) {
@@ -96,12 +115,16 @@ export async function attachPaymentProof(member, transactionId, paymentProofUrl)
 }
 
 export async function listAdminTransactions({ status } = {}) {
+  await expirePendingTransactions();
+
   const query = status ? { status } : {};
   const transactions = await Transaction.find(query).sort({ createdAt: -1 }).lean();
   return transactions.map(toPublicTransaction);
 }
 
 export async function getAdminTransaction(transactionId) {
+  await expirePendingTransactions({ _id: transactionId });
+
   const transaction = await Transaction.findById(transactionId).lean();
 
   if (!transaction) {

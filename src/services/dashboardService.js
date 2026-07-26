@@ -2,9 +2,13 @@ import Invitation from "../models/Invitation.js";
 import Notification from "../models/Notification.js";
 import Transaction from "../models/Transaction.js";
 import User from "../models/User.js";
+import { expirePendingTransactions } from "./transactionService.js";
 
 export async function getMemberDashboard(user) {
   const memberId = user._id;
+
+  await expirePendingTransactions({ memberId });
+
   const [
     activeInvitations,
     draftInvitations,
