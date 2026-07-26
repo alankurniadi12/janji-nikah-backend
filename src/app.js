@@ -13,13 +13,21 @@ import { apiRoutes } from "./routes/index.js";
 
 export function createApp() {
   const app = express();
+  const allowedOrigins = new Set(env.clientUrls);
 
   app.set("trust proxy", 1);
 
   app.use(helmet());
   app.use(
     cors({
-      origin: env.appUrl,
+      origin(origin, callback) {
+        if (!origin || allowedOrigins.has(origin)) {
+          callback(null, true);
+          return;
+        }
+
+        callback(new Error("Origin is not allowed by CORS"));
+      },
       credentials: true
     })
   );

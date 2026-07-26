@@ -13,10 +13,22 @@ function toInteger(value, fallback) {
   return Number.isFinite(parsed) ? parsed : fallback;
 }
 
+function toList(value) {
+  if (!value) {
+    return [];
+  }
+
+  return value
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
 function readEnv() {
   const nodeEnv = process.env.NODE_ENV || "development";
   const isTest = nodeEnv === "test";
   const port = toInteger(process.env.PORT, 5000);
+  const appUrl = process.env.APP_URL || "http://localhost:5173";
   const missingKeys = requiredKeys.filter((key) => !process.env[key]);
 
   if (missingKeys.length > 0 && !isTest) {
@@ -27,7 +39,8 @@ function readEnv() {
     nodeEnv,
     port,
     mongoUri: process.env.MONGODB_URI || "mongodb://127.0.0.1:27017/janji-nikah-test",
-    appUrl: process.env.APP_URL || "http://localhost:5173",
+    appUrl,
+    clientUrls: Array.from(new Set([appUrl, ...toList(process.env.CLIENT_URLS)])),
     apiUrl: process.env.API_URL || `http://localhost:${port}`,
     jwtSecret: process.env.JWT_SECRET || "test_jwt_secret",
     jwtAccessExpiresIn: process.env.JWT_ACCESS_EXPIRES_IN || "15m",
