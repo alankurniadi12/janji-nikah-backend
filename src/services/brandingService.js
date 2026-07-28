@@ -441,39 +441,34 @@ function getPromoTemplateLayout(template, dimensions, format, hasPhoto) {
   }
 
   if (template === "modern") {
-    const photoSize = isStory ? 650 : 420;
+    const photoSize = isStory ? 610 : 330;
     return {
       panel: basePanel,
       photo: {
         x: (dimensions.width - photoSize) / 2,
-        y: isStory ? 310 : 155,
+        y: isStory ? 650 : 435,
         width: photoSize,
         height: photoSize,
         radius: photoSize / 2
       },
-      overlay: {
-        x: 110,
-        y: isStory ? 980 : 545,
-        width: contentWidth - 60,
-        height: isStory ? 560 : 360,
-        radius: 34
-      },
+      overlay: null,
       textX: 140,
-      yStart: isStory ? 1080 : 610,
+      yStart: isStory ? 335 : 215,
       businessFontSize: 34,
-      titleFontSize: isStory ? 80 : 72,
-      titleLineHeight: 86,
-      titleOffset: 105,
-      subtitleFontSize: isStory ? 36 : 31,
-      subtitleLineHeight: 46,
+      titleFontSize: isStory ? 76 : 66,
+      titleLineHeight: isStory ? 82 : 74,
+      titleOffset: 100,
+      subtitleFontSize: isStory ? 36 : 29,
+      subtitleLineHeight: isStory ? 46 : 40,
       subtitleOffset: 70,
       titleMaxCharacters: isStory ? 22 : 19,
       titleMaxLines: isStory ? 2 : 1,
       subtitleMaxCharacters: isStory ? 36 : 30,
-      subtitleMaxLines: isStory ? 2 : 0,
+      subtitleMaxLines: 2,
+      subtitleY: isStory ? 1360 : 835,
       contactBox: {
         x: 140,
-        y: dimensions.height - (isStory ? 385 : 180),
+        y: dimensions.height - (isStory ? 385 : 185),
         width: contentWidth - 120,
         height: isStory ? 180 : 105,
         radius: 52,
@@ -566,12 +561,13 @@ function renderPromoText(profile, titleLines, subtitleLines, layout, style) {
     const pillX = centerX - pillWidth / 2;
     const pillY = layout.yStart - 42;
     const titleY = layout.yStart + layout.titleOffset;
-    const subtitleY = titleY + titleLines.length * layout.titleLineHeight + layout.subtitleOffset;
+    const underlineY = titleY + titleLines.length * layout.titleLineHeight + 12;
+    const subtitleY = layout.subtitleY || underlineY + layout.subtitleOffset;
 
     return `<rect x="${pillX}" y="${pillY}" width="${pillWidth}" height="${pillHeight}" rx="27" fill="${style.accent}" opacity="0.16"/>
   <text x="${centerX}" y="${layout.yStart}" font-family="Arial, sans-serif" font-size="${layout.businessFontSize}" fill="${style.accent}" font-weight="800" letter-spacing="5" text-anchor="middle">${escapeXml(profile.businessName.toUpperCase())}</text>
   ${renderCenteredTextLines(titleLines, centerX, titleY, layout.titleFontSize, layout.titleLineHeight, style.primary, 900)}
-  <path d="M${centerX - 145} ${titleY + titleLines.length * layout.titleLineHeight + 12} H${centerX + 145}" fill="none" stroke="${style.accent}" stroke-width="7" stroke-linecap="round" opacity="0.78"/>
+  <path d="M${centerX - 145} ${underlineY} H${centerX + 145}" fill="none" stroke="${style.accent}" stroke-width="7" stroke-linecap="round" opacity="0.78"/>
   ${renderCenteredTextLines(subtitleLines, centerX, subtitleY, layout.subtitleFontSize, layout.subtitleLineHeight, style.muted, 500)}`;
   }
 
