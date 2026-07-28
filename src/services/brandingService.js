@@ -336,9 +336,7 @@ export function renderPromoSvg(profile, payload, dimensions, format, options = {
   ${renderAccentPath(layout, style, hasPhoto)}
   ${overlay ? renderTextOverlay(overlay, style) : ""}
   ${renderPromoText(profile, titleLines, subtitleLines, layout, style)}
-  <rect x="${contactBox.x}" y="${contactBox.y}" width="${contactBox.width}" height="${contactBox.height}" rx="${contactBox.radius}" fill="${style.primary}"/>
-  <text x="${contactBox.textX}" y="${contactBox.y + contactBox.primaryTextY}" font-family="Arial, sans-serif" font-size="${contactBox.primaryFontSize}" fill="#FFFFFF" font-weight="700">${escapeXml(contact)}</text>
-  <text x="${contactBox.textX}" y="${contactBox.y + contactBox.secondaryTextY}" font-family="Arial, sans-serif" font-size="${contactBox.secondaryFontSize}" fill="#FFFFFF" opacity="0.82">${escapeXml(contactLabel)}</text>
+  ${renderContactBox(contactBox, style, contact, contactLabel)}
   ${renderSocialFooter(profile, layout, style)}` : ""}
 </svg>`;
 }
@@ -391,32 +389,32 @@ function getPromoTemplateLayout(template, dimensions, format, hasPhoto) {
   }
 
   if (template === "elegant") {
-    const photoSize = isStory ? 760 : 520;
+    const photoSize = isStory ? 700 : 460;
     return {
       panel: basePanel,
       photo: {
         x: (dimensions.width - photoSize) / 2,
-        y: isStory ? 320 : 155,
+        y: isStory ? 420 : 250,
         width: photoSize,
         height: photoSize,
         radius: 36
       },
       overlay: {
         x: 110,
-        y: isStory ? 1035 : 610,
+        y: isStory ? 1085 : 645,
         width: contentWidth - 60,
-        height: isStory ? 520 : 330,
+        height: isStory ? 470 : 295,
         radius: 34
       },
       textX: 140,
-      yStart: isStory ? 1135 : 665,
+      yStart: isStory ? 1155 : 700,
       businessFontSize: 34,
-      titleFontSize: isStory ? 78 : 70,
-      titleLineHeight: 84,
-      titleOffset: 105,
+      titleFontSize: isStory ? 70 : 70,
+      titleLineHeight: isStory ? 76 : 84,
+      titleOffset: isStory ? 95 : 105,
       subtitleFontSize: isStory ? 36 : 31,
       subtitleLineHeight: 46,
-      subtitleOffset: 70,
+      subtitleOffset: isStory ? 52 : 70,
       titleMaxCharacters: isStory ? 22 : 19,
       titleMaxLines: isStory ? 2 : 1,
       subtitleMaxCharacters: isStory ? 36 : 30,
@@ -426,12 +424,13 @@ function getPromoTemplateLayout(template, dimensions, format, hasPhoto) {
         y: dimensions.height - (isStory ? 390 : 185),
         width: contentWidth - 120,
         height: isStory ? 180 : 105,
-        radius: 24,
-        textX: 180,
+        radius: 30,
+        textX: 230,
         primaryTextY: isStory ? 80 : 48,
         secondaryTextY: isStory ? 138 : 84,
         primaryFontSize: isStory ? 40 : 34,
-        secondaryFontSize: isStory ? 28 : 24
+        secondaryFontSize: isStory ? 28 : 24,
+        variant: "elegant"
       },
       footerX: 140,
       footerY: isStory ? dimensions.height - 90 : dimensions.height - 30,
@@ -599,6 +598,26 @@ function renderPhotoBorder(photo) {
 function renderTextOverlay(overlay, style) {
   return `<rect x="${overlay.x}" y="${overlay.y}" width="${overlay.width}" height="${overlay.height}" rx="${overlay.radius}" fill="${style.panel}" opacity="0.94"/>
   <rect x="${overlay.x}" y="${overlay.y}" width="${overlay.width}" height="8" rx="4" fill="${style.accent}" opacity="0.90"/>`;
+}
+
+function renderContactBox(contactBox, style, contact, contactLabel) {
+  if (contactBox.variant === "elegant") {
+    const iconSize = contactBox.height > 120 ? 58 : 44;
+    const iconX = contactBox.x + 48;
+    const iconY = contactBox.y + contactBox.height / 2;
+    const labelY = contactBox.y + contactBox.secondaryTextY;
+
+    return `<rect x="${contactBox.x}" y="${contactBox.y}" width="${contactBox.width}" height="${contactBox.height}" rx="${contactBox.radius}" fill="#FFF9F3" stroke="${style.primary}" stroke-width="3"/>
+  <circle cx="${iconX}" cy="${iconY}" r="${iconSize / 2}" fill="${style.accent}" opacity="0.20"/>
+  <circle cx="${iconX}" cy="${iconY}" r="${iconSize / 2 - 7}" fill="${style.panel}" stroke="${style.accent}" stroke-width="3"/>
+  <text x="${iconX}" y="${iconY + 9}" font-family="Arial, sans-serif" font-size="${contactBox.height > 120 ? 24 : 18}" fill="${style.primary}" font-weight="800" text-anchor="middle">WA</text>
+  <text x="${contactBox.textX}" y="${contactBox.y + contactBox.primaryTextY}" font-family="Georgia, 'Times New Roman', serif" font-size="${contactBox.primaryFontSize}" fill="${style.primary}" font-weight="700">${escapeXml(contact)}</text>
+  <text x="${contactBox.textX}" y="${labelY}" font-family="Arial, sans-serif" font-size="${contactBox.secondaryFontSize}" fill="${style.muted}" opacity="0.88">${escapeXml(contactLabel)}</text>`;
+  }
+
+  return `<rect x="${contactBox.x}" y="${contactBox.y}" width="${contactBox.width}" height="${contactBox.height}" rx="${contactBox.radius}" fill="${style.primary}"/>
+  <text x="${contactBox.textX}" y="${contactBox.y + contactBox.primaryTextY}" font-family="Arial, sans-serif" font-size="${contactBox.primaryFontSize}" fill="#FFFFFF" font-weight="700">${escapeXml(contact)}</text>
+  <text x="${contactBox.textX}" y="${contactBox.y + contactBox.secondaryTextY}" font-family="Arial, sans-serif" font-size="${contactBox.secondaryFontSize}" fill="#FFFFFF" opacity="0.82">${escapeXml(contactLabel)}</text>`;
 }
 
 function renderSocialFooter(profile, layout, style) {
