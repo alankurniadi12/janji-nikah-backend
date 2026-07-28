@@ -4,7 +4,8 @@ import {
   publicGuestInvitationDetail,
   publicGuestOpen,
   publicGuestRsvp,
-  publicGuestWish
+  publicGuestWish,
+  publicGuestWishUpdate
 } from "../controllers/publicGuestController.js";
 import { publicInvitationDetail } from "../controllers/publicInvitationController.js";
 
@@ -15,3 +16,4 @@ publicInvitationRoutes.get("/invitations/:username/:slug/guest/:token", publicGu
 publicInvitationRoutes.post("/invitations/:username/:slug/guest/:token/open", publicGuestOpen);
 publicInvitationRoutes.post("/invitations/:username/:slug/guest/:token/rsvp", publicGuestRsvp);
 publicInvitationRoutes.post("/invitations/:username/:slug/guest/:token/wishes", publicGuestWish);
+publicInvitationRoutes.patch("/invitations/:username/:slug/guest/:token/wishes/:wishId", publicGuestWishUpdate);

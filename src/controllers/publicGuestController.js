@@ -2,7 +2,8 @@ import {
   getPublicGuestInvitation,
   markPublicGuestOpened,
   submitPublicRsvp,
-  submitPublicWish
+  submitPublicWish,
+  updatePublicWish
 } from "../services/publicGuestService.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 
@@ -39,6 +40,23 @@ export const publicGuestWish = asyncHandler(async (req, res) => {
   const wish = await submitPublicWish(req.params.username, req.params.slug, req.params.token, req.body);
 
   res.status(201).json({
+    success: true,
+    data: {
+      wish
+    }
+  });
+});
+
+export const publicGuestWishUpdate = asyncHandler(async (req, res) => {
+  const wish = await updatePublicWish(
+    req.params.username,
+    req.params.slug,
+    req.params.token,
+    req.params.wishId,
+    req.body
+  );
+
+  res.json({
     success: true,
     data: {
       wish

@@ -103,14 +103,58 @@ export async function submitPublicWish(username, slug, token, payload) {
     throw new AppError(400, `Ucapan maksimal ${MAX_WISH_MESSAGE_LENGTH} karakter.`);
   }
 
-  const rsvp = await RSVP.findOne({ guestId: guest._id }).lean();
+  const rsvpStatus = await upsertGuestRsvp(guest, payload?.rsvpStatus);
   const wish = await Wish.create({
     invitationId: guest.invitationId,
     guestId: guest._id,
     displayName,
     message,
-    rsvpStatus: rsvp?.status || null
+    rsvpStatus
   });
+
+  return toPublicWish(wish);
+}
+
+export async function updatePublicWish(username, slug, token, wishId, payload) {
+  const publicInvitation = await getPublicGuestInvitation(username, slug, token);
+
+  if (!publicInvitation.isActive) {
+    return publicInvitation;
+  }
+
+  const guest = await findGuest(publicInvitation.invitation.id, token);
+  const wish = await Wish.findOne({
+    _id: wishId,
+    invitationId: guest.invitationId,
+    guestId: guest._id,
+    deletedAt: null
+  });
+
+  if (!wish) {
+    throw new AppError(404, "Ucapan tidak ditemukan.");
+  }
+
+  const displayName = sanitizeGuestText(payload?.displayName || guest.name, 100);
+  const rawMessage = String(payload?.message || "").trim();
+  const message = sanitizeGuestText(rawMessage, MAX_WISH_MESSAGE_LENGTH);
+
+  if (!displayName) {
+    throw new AppError(400, "Nama ucapan wajib diisi.");
+  }
+
+  if (!message) {
+    throw new AppError(400, "Ucapan wajib diisi.");
+  }
+
+  if (rawMessage.length > MAX_WISH_MESSAGE_LENGTH) {
+    throw new AppError(400, `Ucapan maksimal ${MAX_WISH_MESSAGE_LENGTH} karakter.`);
+  }
+
+  const rsvpStatus = await upsertGuestRsvp(guest, payload?.rsvpStatus || wish.rsvpStatus);
+  wish.displayName = displayName;
+  wish.message = message;
+  wish.rsvpStatus = rsvpStatus;
+  await wish.save();
 
   return toPublicWish(wish);
 }
@@ -123,4 +167,22 @@ async function findGuest(invitationId, token) {
   }
 
   return guest;
+}
+
+async function upsertGuestRsvp(guest, requestedStatus) {
+  const status = ["attending", "not_attending"].includes(requestedStatus) ? requestedStatus : "attending";
+
+  await RSVP.findOneAndUpdate(
+    { guestId: guest._id },
+    {
+      $set: {
+        invitationId: guest.invitationId,
+        guestId: guest._id,
+        status
+      }
+    },
+    { new: true, upsert: true, setDefaultsOnInsert: true }
+  );
+
+  return status;
 }
