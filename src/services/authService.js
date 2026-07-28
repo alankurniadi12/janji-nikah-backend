@@ -97,7 +97,7 @@ export async function completeOnboarding(user, payload) {
 
 export async function refreshAuth(refreshToken) {
   if (!refreshToken) {
-    throw new AppError(401, "Session tidak ditemukan.");
+    throw new AppError(401, "Sesi login tidak ditemukan. Silakan masuk ulang.");
   }
 
   const payload = verifyRefreshToken(refreshToken);
