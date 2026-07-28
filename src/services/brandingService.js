@@ -36,6 +36,24 @@ const TEMPLATE_STYLES = {
   }
 };
 
+const CAPTION_MODES = {
+  soft: {
+    label: "Soft selling",
+    defaultOffer: "Bantu calon pengantin punya undangan digital yang rapi, cantik, dan mudah dibagikan.",
+    defaultCta: "Konsultasi dulu boleh. Ceritakan konsep acaramu, nanti kami bantu siapkan undangannya."
+  },
+  direct: {
+    label: "Hard selling",
+    defaultOffer: "Butuh undangan digital pernikahan yang siap dibagikan tanpa ribet?",
+    defaultCta: "Hubungi kami sekarang untuk mulai buat undangan digital pernikahanmu."
+  },
+  whatsapp: {
+    label: "WhatsApp broadcast",
+    defaultOffer: "Halo, kami bantu pembuatan undangan digital pernikahan dengan tampilan elegan dan link siap dibagikan.",
+    defaultCta: "Balas pesan ini untuk tanya paket dan cek contoh undangan."
+  }
+};
+
 export function normalizeBrandingName(value) {
   return String(value || "")
     .toLowerCase()
@@ -134,12 +152,48 @@ function toPublicPromoAssets(promoAssets = {}) {
 
 export function generatePromoCaption(profile, payload = {}) {
   const businessName = profile.businessName;
-  const whatsapp = profile.whatsapp ? `\n\nKonsultasi: ${profile.whatsapp}` : "";
-  const instagram = profile.instagram ? `\nInstagram: ${profile.instagram}` : "";
-  const offer = sanitizeShortText(payload.offer || "Undangan digital elegan untuk hari bahagiamu.");
-  const cta = sanitizeShortText(payload.cta || "Yuk buat undangan yang rapi, cantik, dan mudah dibagikan.");
+  const mode = normalizeCaptionMode(payload.promoMode);
+  const modeConfig = CAPTION_MODES[mode];
+  const offer = sanitizeShortText(payload.offer || modeConfig.defaultOffer);
+  const cta = sanitizeShortText(payload.cta || modeConfig.defaultCta);
+  const contactLines = buildContactLines(profile);
 
-  return `${offer}\n\n${businessName} siap bantu kamu punya undangan pernikahan digital yang praktis untuk tamu, RSVP, ucapan, dan amplop digital.${whatsapp}${instagram}\n\n${cta}`;
+  if (mode === "whatsapp") {
+    return [
+      offer,
+      "",
+      `Dengan ${businessName}, undangan bisa berisi detail acara, galeri foto, RSVP, ucapan tamu, dan amplop digital optional.`,
+      "",
+      cta,
+      ...(contactLines.length ? ["", ...contactLines] : [])
+    ].join("\n");
+  }
+
+  if (mode === "direct") {
+    return [
+      offer,
+      "",
+      `Di ${businessName}, kamu bisa dapat undangan digital yang:`,
+      "- tampil elegan di HP tamu",
+      "- punya link personal untuk daftar tamu",
+      "- mendukung RSVP, ucapan, dan amplop digital optional",
+      "- praktis dibagikan lewat WhatsApp",
+      "",
+      contactLines.length ? contactLines.join("\n") : "Hubungi kami untuk konsultasi.",
+      "",
+      cta
+    ].join("\n");
+  }
+
+  return [
+    offer,
+    "",
+    `${businessName} siap bantu menyiapkan undangan pernikahan digital yang praktis untuk tamu, RSVP, ucapan, dan amplop digital optional.`,
+    "",
+    contactLines.length ? contactLines.join("\n") : "Hubungi kami untuk konsultasi.",
+    "",
+    cta
+  ].join("\n");
 }
 
 async function getBusinessNameWarnings(member, businessName) {
@@ -210,6 +264,7 @@ export function renderPromoSvg(profile, payload, dimensions, format) {
   const title = sanitizeShortText(payload.headline || "Undangan Digital Pernikahan", 80);
   const subtitle = sanitizeShortText(payload.subheadline || "Cantik, praktis, dan siap dibagikan ke semua tamu.", 130);
   const contact = profile.whatsapp || profile.instagram || profile.tiktok || profile.facebook || "Hubungi kami";
+  const contactLabel = profile.whatsapp ? "Konsultasi via WhatsApp" : "Konsultasi undangan digital";
   const titleLines = wrapText(title, isStory ? 21 : 18, 3);
   const subtitleLines = wrapText(subtitle, isStory ? 34 : 28, 4);
   const yStart = isStory ? 500 : 270;
@@ -226,9 +281,22 @@ export function renderPromoSvg(profile, payload, dimensions, format) {
   ${renderTextLines(subtitleLines, 140, yStart + (titleLines.length * 88) + 95, isStory ? 38 : 34, 48, style.muted, 400)}
   <rect x="140" y="${height - (isStory ? 410 : 260)}" width="${contentWidth - 120}" height="${isStory ? 190 : 145}" rx="28" fill="${style.primary}"/>
   <text x="180" y="${height - (isStory ? 325 : 175)}" font-family="Arial, sans-serif" font-size="${isStory ? 42 : 36}" fill="#FFFFFF" font-weight="700">${escapeXml(contact)}</text>
-  <text x="180" y="${height - (isStory ? 265 : 125)}" font-family="Arial, sans-serif" font-size="${isStory ? 30 : 26}" fill="#FFFFFF" opacity="0.82">Konsultasi undangan digital</text>
+  <text x="180" y="${height - (isStory ? 265 : 125)}" font-family="Arial, sans-serif" font-size="${isStory ? 30 : 26}" fill="#FFFFFF" opacity="0.82">${escapeXml(contactLabel)}</text>
   <text x="140" y="${height - 90}" font-family="Arial, sans-serif" font-size="24" fill="${style.text}" opacity="0.55">Janji Nikah Partner</text>
 </svg>`;
+}
+
+function buildContactLines(profile) {
+  return [
+    profile.whatsapp ? `WhatsApp: ${profile.whatsapp}` : "",
+    profile.instagram ? `Instagram: ${profile.instagram}` : "",
+    profile.tiktok ? `TikTok: ${profile.tiktok}` : "",
+    profile.facebook ? `Facebook: ${profile.facebook}` : ""
+  ].filter(Boolean);
+}
+
+function normalizeCaptionMode(value) {
+  return Object.hasOwn(CAPTION_MODES, value) ? value : "soft";
 }
 
 function renderTextLines(lines, x, y, fontSize, lineHeight, fill, weight) {

@@ -44,8 +44,24 @@ test("generates Indonesian promo caption with contact details", () => {
   });
 
   assert.match(caption, /Ayu Wedding/);
-  assert.match(caption, /Konsultasi: \+628123/);
+  assert.match(caption, /WhatsApp: \+628123/);
   assert.match(caption, /Instagram: @ayu/);
+});
+
+test("generates direct selling promo caption with benefit bullets", () => {
+  const caption = generatePromoCaption(
+    {
+      businessName: "Ayu Wedding",
+      whatsapp: "+628123"
+    },
+    {
+      promoMode: "direct"
+    }
+  );
+
+  assert.match(caption, /yang:/);
+  assert.match(caption, /- tampil elegan/);
+  assert.match(caption, /WhatsApp: \+628123/);
 });
 
 test("renders promo SVG that sharp can parse", async () => {
