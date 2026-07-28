@@ -50,7 +50,7 @@ const brandingProfileSchema = new Schema(
     selectedTemplate: {
       type: String,
       enum: ["elegant", "modern", "minimal"],
-      default: "elegant"
+      default: "minimal"
     },
     promoPhotoUrl: {
       type: String,

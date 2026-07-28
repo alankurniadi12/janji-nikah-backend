@@ -247,7 +247,7 @@ function normalizeBrandingPayload(payload) {
     throw new AppError(400, "Nama bisnis wajib diisi.");
   }
 
-  const selectedTemplate = payload.selectedTemplate || "elegant";
+  const selectedTemplate = payload.selectedTemplate || "minimal";
 
   if (!Object.hasOwn(TEMPLATE_STYLES, selectedTemplate)) {
     throw new AppError(400, "Template branding tidak valid.");
@@ -271,7 +271,7 @@ async function generatePromoImage(profile, payload, directory, format) {
   const photoBuffer = await getPromoPhotoBuffer(profile.promoPhotoUrl);
 
   if (photoBuffer) {
-    const photo = getPromoPhotoLayout(dimensions, format);
+    const photo = getPromoTemplateLayout(profile.selectedTemplate, dimensions, format, true).photo;
     const baseSvg = renderPromoSvg(profile, payload, dimensions, format, {
       hasPhoto: true,
       includeContent: false
@@ -316,39 +316,14 @@ export function renderPromoSvg(profile, payload, dimensions, format, options = {
   const hasPhoto = Boolean(options.hasPhoto || options.photoDataUri);
   const includeBase = options.includeBase !== false;
   const includeContent = options.includeContent !== false;
-  const contentWidth = width - 160;
-  const panel = {
-    x: 80,
-    y: isStory ? 180 : 110,
-    width: contentWidth,
-    height: isStory ? 1560 : 860,
-    radius: 42
-  };
+  const layout = getPromoTemplateLayout(profile.selectedTemplate, dimensions, format, hasPhoto);
+  const { panel, photo, overlay, contactBox } = layout;
   const title = sanitizeShortText(payload.headline || "Undangan Digital Pernikahan", 80);
   const subtitle = sanitizeShortText(payload.subheadline || "Cantik, praktis, dan siap dibagikan ke semua tamu.", 130);
   const contact = profile.whatsapp || profile.instagram || profile.tiktok || profile.facebook || "Hubungi kami";
   const contactLabel = profile.whatsapp ? "Konsultasi via WhatsApp" : "Konsultasi undangan digital";
-  const titleLines = wrapText(title, isStory ? 21 : 18, hasPhoto ? (isStory ? 2 : 1) : 3);
-  const subtitleLines = wrapText(subtitle, isStory ? 34 : 28, hasPhoto ? (isStory ? 2 : 1) : 4);
-  const yStart = hasPhoto ? (isStory ? 1175 : 635) : isStory ? 500 : 270;
-  const contactBox = {
-    x: 140,
-    y: hasPhoto ? (isStory ? height - 410 : height - 205) : height - (isStory ? 410 : 260),
-    width: contentWidth - 120,
-    height: hasPhoto && !isStory ? 110 : isStory ? 190 : 145,
-    radius: hasPhoto && !isStory ? 24 : 28
-  };
-  const footerY = hasPhoto && !isStory ? height - 35 : height - 90;
-  const photo = hasPhoto ? getPromoPhotoLayout(dimensions, format) : null;
-  const overlay = hasPhoto
-    ? {
-        x: 110,
-        y: isStory ? 1085 : 585,
-        width: contentWidth - 60,
-        height: isStory ? 470 : 300,
-        radius: 34
-      }
-    : null;
+  const titleLines = wrapText(title, layout.titleMaxCharacters, layout.titleMaxLines);
+  const subtitleLines = wrapText(subtitle, layout.subtitleMaxCharacters, layout.subtitleMaxLines);
 
   return `<?xml version="1.0" encoding="UTF-8"?>
 <svg width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" xmlns="http://www.w3.org/2000/svg">
@@ -358,28 +333,236 @@ export function renderPromoSvg(profile, payload, dimensions, format, options = {
   <rect x="${panel.x}" y="${panel.y}" width="${panel.width}" height="${panel.height}" rx="${panel.radius}" fill="${style.panel}"/>` : ""}
   ${includeContent && photo ? renderPhotoBorder(photo) : ""}
   ${includeContent ? `
-  <path d="M170 ${isStory ? 310 : 220} C310 ${isStory ? 210 : 120}, 430 ${isStory ? 410 : 300}, 560 ${isStory ? 290 : 190} S820 ${isStory ? 220 : 150}, 910 ${isStory ? 330 : 240}" fill="none" stroke="${style.accent}" stroke-width="7" stroke-linecap="round" opacity="${hasPhoto ? 0.92 : 0.75}"/>
+  ${renderAccentPath(layout, style, hasPhoto)}
   ${overlay ? renderTextOverlay(overlay, style) : ""}
-  <text x="140" y="${yStart}" font-family="Arial, sans-serif" font-size="34" fill="${style.accent}" font-weight="700" letter-spacing="4">${escapeXml(profile.businessName.toUpperCase())}</text>
-  ${renderTextLines(titleLines, 140, yStart + 115, isStory ? 82 : 76, 88, style.primary, 800)}
-  ${renderTextLines(subtitleLines, 140, yStart + (titleLines.length * 88) + 95, isStory ? 38 : 34, 48, style.muted, 400)}
+  <text x="${layout.textX}" y="${layout.yStart}" font-family="Arial, sans-serif" font-size="${layout.businessFontSize}" fill="${style.accent}" font-weight="700" letter-spacing="4">${escapeXml(profile.businessName.toUpperCase())}</text>
+  ${renderTextLines(titleLines, layout.textX, layout.yStart + layout.titleOffset, layout.titleFontSize, layout.titleLineHeight, style.primary, 800)}
+  ${renderTextLines(subtitleLines, layout.textX, layout.yStart + layout.titleOffset + (titleLines.length * layout.titleLineHeight) + layout.subtitleOffset, layout.subtitleFontSize, layout.subtitleLineHeight, style.muted, 400)}
   <rect x="${contactBox.x}" y="${contactBox.y}" width="${contactBox.width}" height="${contactBox.height}" rx="${contactBox.radius}" fill="${style.primary}"/>
-  <text x="180" y="${contactBox.y + (isStory ? 85 : hasPhoto ? 50 : 85)}" font-family="Arial, sans-serif" font-size="${isStory ? 42 : 36}" fill="#FFFFFF" font-weight="700">${escapeXml(contact)}</text>
-  <text x="180" y="${contactBox.y + (isStory ? 145 : hasPhoto ? 88 : 135)}" font-family="Arial, sans-serif" font-size="${isStory ? 30 : 26}" fill="#FFFFFF" opacity="0.82">${escapeXml(contactLabel)}</text>
-  <text x="140" y="${footerY}" font-family="Arial, sans-serif" font-size="24" fill="${style.text}" opacity="0.55">Janji Nikah Partner</text>` : ""}
+  <text x="${contactBox.textX}" y="${contactBox.y + contactBox.primaryTextY}" font-family="Arial, sans-serif" font-size="${contactBox.primaryFontSize}" fill="#FFFFFF" font-weight="700">${escapeXml(contact)}</text>
+  <text x="${contactBox.textX}" y="${contactBox.y + contactBox.secondaryTextY}" font-family="Arial, sans-serif" font-size="${contactBox.secondaryFontSize}" fill="#FFFFFF" opacity="0.82">${escapeXml(contactLabel)}</text>
+  <text x="${layout.footerX}" y="${layout.footerY}" font-family="Arial, sans-serif" font-size="24" fill="${style.text}" opacity="0.55">Janji Nikah Partner</text>` : ""}
 </svg>`;
 }
 
-function getPromoPhotoLayout(dimensions, format) {
+function getPromoTemplateLayout(template, dimensions, format, hasPhoto) {
+  const isStory = format === "story";
+  const contentWidth = dimensions.width - 160;
+  const basePanel = {
+    x: 80,
+    y: isStory ? 180 : 110,
+    width: contentWidth,
+    height: isStory ? 1560 : 860,
+    radius: 42
+  };
+
+  if (!hasPhoto) {
+    return {
+      panel: basePanel,
+      photo: null,
+      overlay: null,
+      textX: 140,
+      yStart: isStory ? 500 : 270,
+      businessFontSize: 34,
+      titleFontSize: isStory ? 82 : 76,
+      titleLineHeight: 88,
+      titleOffset: 115,
+      subtitleFontSize: isStory ? 38 : 34,
+      subtitleLineHeight: 48,
+      subtitleOffset: 95,
+      titleMaxCharacters: isStory ? 21 : 18,
+      titleMaxLines: 3,
+      subtitleMaxCharacters: isStory ? 34 : 28,
+      subtitleMaxLines: 4,
+      contactBox: {
+        x: 140,
+        y: dimensions.height - (isStory ? 410 : 260),
+        width: contentWidth - 120,
+        height: isStory ? 190 : 145,
+        radius: 28,
+        textX: 180,
+        primaryTextY: 85,
+        secondaryTextY: isStory ? 145 : 135,
+        primaryFontSize: isStory ? 42 : 36,
+        secondaryFontSize: isStory ? 30 : 26
+      },
+      footerX: 140,
+      footerY: dimensions.height - 90,
+      accentVariant: "wave"
+    };
+  }
+
+  if (template === "elegant") {
+    const photoSize = isStory ? 760 : 520;
+    return {
+      panel: basePanel,
+      photo: {
+        x: (dimensions.width - photoSize) / 2,
+        y: isStory ? 320 : 155,
+        width: photoSize,
+        height: photoSize,
+        radius: 36
+      },
+      overlay: {
+        x: 110,
+        y: isStory ? 1035 : 610,
+        width: contentWidth - 60,
+        height: isStory ? 520 : 330,
+        radius: 34
+      },
+      textX: 140,
+      yStart: isStory ? 1135 : 665,
+      businessFontSize: 34,
+      titleFontSize: isStory ? 78 : 70,
+      titleLineHeight: 84,
+      titleOffset: 105,
+      subtitleFontSize: isStory ? 36 : 31,
+      subtitleLineHeight: 46,
+      subtitleOffset: 70,
+      titleMaxCharacters: isStory ? 22 : 19,
+      titleMaxLines: isStory ? 2 : 1,
+      subtitleMaxCharacters: isStory ? 36 : 30,
+      subtitleMaxLines: isStory ? 2 : 0,
+      contactBox: {
+        x: 140,
+        y: dimensions.height - (isStory ? 390 : 185),
+        width: contentWidth - 120,
+        height: isStory ? 180 : 105,
+        radius: 24,
+        textX: 180,
+        primaryTextY: isStory ? 80 : 48,
+        secondaryTextY: isStory ? 138 : 84,
+        primaryFontSize: isStory ? 40 : 34,
+        secondaryFontSize: isStory ? 28 : 24
+      },
+      footerX: 140,
+      footerY: isStory ? dimensions.height - 90 : dimensions.height - 30,
+      accentVariant: "corner"
+    };
+  }
+
+  if (template === "modern") {
+    const photoSize = isStory ? 650 : 420;
+    return {
+      panel: basePanel,
+      photo: {
+        x: (dimensions.width - photoSize) / 2,
+        y: isStory ? 310 : 155,
+        width: photoSize,
+        height: photoSize,
+        radius: photoSize / 2
+      },
+      overlay: {
+        x: 110,
+        y: isStory ? 980 : 545,
+        width: contentWidth - 60,
+        height: isStory ? 560 : 360,
+        radius: 34
+      },
+      textX: 140,
+      yStart: isStory ? 1080 : 610,
+      businessFontSize: 34,
+      titleFontSize: isStory ? 80 : 72,
+      titleLineHeight: 86,
+      titleOffset: 105,
+      subtitleFontSize: isStory ? 36 : 31,
+      subtitleLineHeight: 46,
+      subtitleOffset: 70,
+      titleMaxCharacters: isStory ? 22 : 19,
+      titleMaxLines: isStory ? 2 : 1,
+      subtitleMaxCharacters: isStory ? 36 : 30,
+      subtitleMaxLines: isStory ? 2 : 0,
+      contactBox: {
+        x: 140,
+        y: dimensions.height - (isStory ? 385 : 180),
+        width: contentWidth - 120,
+        height: isStory ? 180 : 105,
+        radius: 52,
+        textX: 180,
+        primaryTextY: isStory ? 80 : 48,
+        secondaryTextY: isStory ? 138 : 84,
+        primaryFontSize: isStory ? 40 : 34,
+        secondaryFontSize: isStory ? 28 : 24
+      },
+      footerX: 140,
+      footerY: isStory ? dimensions.height - 90 : dimensions.height - 30,
+      accentVariant: "circle"
+    };
+  }
+
+  return getMinimalPhotoLayout(dimensions, format);
+}
+
+function getMinimalPhotoLayout(dimensions, format) {
   const isStory = format === "story";
 
   return {
-    x: 80,
-    y: isStory ? 180 : 110,
-    width: dimensions.width - 160,
-    height: isStory ? 1040 : 560,
-    radius: 42
+    panel: {
+      x: 80,
+      y: isStory ? 180 : 110,
+      width: dimensions.width - 160,
+      height: isStory ? 1560 : 860,
+      radius: 42
+    },
+    photo: {
+      x: 80,
+      y: isStory ? 180 : 110,
+      width: dimensions.width - 160,
+      height: isStory ? 1040 : 560,
+      radius: 42
+    },
+    overlay: {
+      x: 110,
+      y: isStory ? 1085 : 585,
+      width: dimensions.width - 220,
+      height: isStory ? 470 : 300,
+      radius: 34
+    },
+    textX: 140,
+    yStart: isStory ? 1175 : 635,
+    businessFontSize: 34,
+    titleFontSize: isStory ? 82 : 76,
+    titleLineHeight: 88,
+    titleOffset: 115,
+    subtitleFontSize: isStory ? 38 : 34,
+    subtitleLineHeight: 48,
+    subtitleOffset: 95,
+    titleMaxCharacters: isStory ? 21 : 18,
+    titleMaxLines: isStory ? 2 : 1,
+    subtitleMaxCharacters: isStory ? 34 : 28,
+    subtitleMaxLines: isStory ? 2 : 0,
+    contactBox: {
+      x: 140,
+      y: isStory ? dimensions.height - 410 : dimensions.height - 205,
+      width: dimensions.width - 280,
+      height: isStory ? 190 : 110,
+      radius: isStory ? 28 : 24,
+      textX: 180,
+      primaryTextY: isStory ? 85 : 50,
+      secondaryTextY: isStory ? 145 : 88,
+      primaryFontSize: isStory ? 42 : 36,
+      secondaryFontSize: isStory ? 30 : 26
+    },
+    footerX: 140,
+    footerY: isStory ? dimensions.height - 90 : dimensions.height - 35,
+    accentVariant: "wave"
   };
+}
+
+function renderAccentPath(layout, style, hasPhoto) {
+  if (layout.accentVariant === "circle" && layout.photo) {
+    const cx = layout.photo.x + layout.photo.width / 2;
+    const cy = layout.photo.y + layout.photo.height / 2;
+    return `<circle cx="${cx}" cy="${cy}" r="${layout.photo.width / 2 + 34}" fill="none" stroke="${style.accent}" stroke-width="8" opacity="0.86"/>`;
+  }
+
+  if (layout.accentVariant === "corner" && layout.photo) {
+    return `<path d="M${layout.photo.x + 35} ${layout.photo.y - 22} H${layout.photo.x + layout.photo.width - 35}" fill="none" stroke="${style.accent}" stroke-width="8" stroke-linecap="round" opacity="0.82"/>
+  <path d="M${layout.photo.x - 22} ${layout.photo.y + 35} V${layout.photo.y + layout.photo.height - 35}" fill="none" stroke="${style.accent}" stroke-width="8" stroke-linecap="round" opacity="0.35"/>`;
+  }
+
+  const isStory = layout.panel.height > 1000;
+  return `<path d="M170 ${isStory ? 310 : 220} C310 ${isStory ? 210 : 120}, 430 ${isStory ? 410 : 300}, 560 ${isStory ? 290 : 190} S820 ${isStory ? 220 : 150}, 910 ${isStory ? 330 : 240}" fill="none" stroke="${style.accent}" stroke-width="7" stroke-linecap="round" opacity="${hasPhoto ? 0.92 : 0.75}"/>`;
 }
 
 function renderPhotoBorder(photo) {
