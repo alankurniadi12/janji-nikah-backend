@@ -389,36 +389,36 @@ function getPromoTemplateLayout(template, dimensions, format, hasPhoto) {
   }
 
   if (template === "elegant") {
-    const photoSize = isStory ? 700 : 460;
+    const photoSize = isStory ? 650 : 360;
     return {
       panel: basePanel,
       photo: {
         x: (dimensions.width - photoSize) / 2,
-        y: isStory ? 420 : 250,
+        y: isStory ? 735 : 455,
         width: photoSize,
         height: photoSize,
         radius: 36
       },
       overlay: {
         x: 110,
-        y: isStory ? 1085 : 645,
+        y: isStory ? 245 : 155,
         width: contentWidth - 60,
-        height: isStory ? 470 : 295,
+        height: isStory ? 430 : 250,
         radius: 34
       },
       textX: 140,
-      yStart: isStory ? 1155 : 700,
+      yStart: isStory ? 335 : 225,
       businessFontSize: 34,
-      titleFontSize: isStory ? 70 : 70,
-      titleLineHeight: isStory ? 76 : 84,
-      titleOffset: isStory ? 95 : 105,
-      subtitleFontSize: isStory ? 36 : 31,
-      subtitleLineHeight: 46,
-      subtitleOffset: isStory ? 52 : 70,
+      titleFontSize: isStory ? 68 : 62,
+      titleLineHeight: isStory ? 74 : 70,
+      titleOffset: isStory ? 92 : 86,
+      subtitleFontSize: isStory ? 34 : 28,
+      subtitleLineHeight: isStory ? 44 : 38,
+      subtitleOffset: isStory ? 50 : 42,
       titleMaxCharacters: isStory ? 22 : 19,
       titleMaxLines: isStory ? 2 : 1,
       subtitleMaxCharacters: isStory ? 36 : 30,
-      subtitleMaxLines: isStory ? 2 : 0,
+      subtitleMaxLines: 2,
       contactBox: {
         x: 140,
         y: dimensions.height - (isStory ? 390 : 185),
