@@ -419,15 +419,16 @@ function getPromoTemplateLayout(template, dimensions, format, hasPhoto) {
       titleMaxLines: isStory ? 2 : 1,
       subtitleMaxCharacters: isStory ? 36 : 30,
       subtitleMaxLines: 2,
+      subtitleY: isStory ? 1435 : 830,
       contactBox: {
         x: 140,
-        y: dimensions.height - (isStory ? 390 : 185),
+        y: dimensions.height - (isStory ? 390 : 180),
         width: contentWidth - 120,
-        height: isStory ? 180 : 105,
+        height: isStory ? 180 : 95,
         radius: 30,
         textX: 230,
-        primaryTextY: isStory ? 80 : 48,
-        secondaryTextY: isStory ? 138 : 84,
+        primaryTextY: isStory ? 80 : 44,
+        secondaryTextY: isStory ? 138 : 78,
         primaryFontSize: isStory ? 40 : 34,
         secondaryFontSize: isStory ? 28 : 24,
         variant: "elegant"
@@ -546,7 +547,7 @@ function getMinimalPhotoLayout(dimensions, format) {
 function renderPromoText(profile, titleLines, subtitleLines, layout, style) {
   if (layout.textVariant === "elegant") {
     const titleY = layout.yStart + layout.titleOffset;
-    const subtitleY = titleY + titleLines.length * layout.titleLineHeight + layout.subtitleOffset;
+    const subtitleY = layout.subtitleY || titleY + titleLines.length * layout.titleLineHeight + layout.subtitleOffset;
 
     return `<text x="${layout.textX}" y="${layout.yStart}" font-family="Georgia, 'Times New Roman', serif" font-size="${layout.businessFontSize}" fill="${style.accent}" font-weight="700" letter-spacing="5">${escapeXml(profile.businessName.toUpperCase())}</text>
   ${renderStyledTextLines(titleLines, layout.textX, titleY, layout.titleFontSize, layout.titleLineHeight, style.primary, 700, "Georgia, 'Times New Roman', serif", "italic")}
