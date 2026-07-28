@@ -4,10 +4,11 @@ import path from "node:path";
 
 import sharp from "sharp";
 
+import { env } from "../config/env.js";
 import BrandingProfile from "../models/BrandingProfile.js";
 import { ensureDirectory, resolveUploadPath } from "../middlewares/upload.js";
 import { AppError } from "../utils/AppError.js";
-import { toUploadUrl } from "../utils/fileUrl.js";
+import { toRelativeUploadUrl, toUploadUrl } from "../utils/fileUrl.js";
 
 const TEMPLATE_STYLES = {
   elegant: {
@@ -76,6 +77,7 @@ export function toPublicBrandingProfile(profile, warnings = []) {
     tiktok: profile.tiktok,
     whatsapp: profile.whatsapp,
     selectedTemplate: profile.selectedTemplate,
+    promoPhotoUrl: profile.promoPhotoUrl || "",
     promoAssets: toPublicPromoAssets(profile.promoAssets),
     warnings,
     createdAt: profile.createdAt,
@@ -109,6 +111,26 @@ export async function upsertBrandingProfile(member, payload = {}) {
   ).lean();
 
   return toPublicBrandingProfile(profile, warnings);
+}
+
+export async function replaceBrandingPromoPhoto(member, file) {
+  assertUploadedFile(file);
+
+  const profile = await BrandingProfile.findOne({ memberId: member._id });
+
+  if (!profile) {
+    throw new AppError(404, "Profil branding belum dibuat.");
+  }
+
+  const directory = resolveUploadPath("members", member._id.toString(), "branding", "photos");
+  const { publicUrl } = await processAndStorePromoPhoto(file, directory);
+  const oldPhotoUrl = profile.promoPhotoUrl;
+
+  profile.promoPhotoUrl = publicUrl;
+  await profile.save();
+  await deleteUploadByUrl(oldPhotoUrl);
+
+  return toPublicBrandingProfile(profile);
 }
 
 export async function generateBrandingAssets(member, payload = {}) {
@@ -246,7 +268,9 @@ async function generatePromoImage(profile, payload, directory, format) {
 
   const dimensions = format === "story" ? { width: 1080, height: 1920 } : { width: 1080, height: 1080 };
   const filePath = path.join(directory, `${format}-${crypto.randomUUID()}.webp`);
-  const svg = renderPromoSvg(profile, payload, dimensions, format);
+  const svg = renderPromoSvg(profile, payload, dimensions, format, {
+    photoDataUri: await getPromoPhotoDataUri(profile.promoPhotoUrl)
+  });
 
   await sharp(Buffer.from(svg)).webp({ quality: 90 }).toFile(filePath);
 
@@ -256,18 +280,28 @@ async function generatePromoImage(profile, payload, directory, format) {
   };
 }
 
-export function renderPromoSvg(profile, payload, dimensions, format) {
+export function renderPromoSvg(profile, payload, dimensions, format, options = {}) {
   const style = TEMPLATE_STYLES[profile.selectedTemplate] || TEMPLATE_STYLES.elegant;
   const { width, height } = dimensions;
   const isStory = format === "story";
+  const hasPhoto = Boolean(options.photoDataUri);
   const contentWidth = width - 160;
   const title = sanitizeShortText(payload.headline || "Undangan Digital Pernikahan", 80);
   const subtitle = sanitizeShortText(payload.subheadline || "Cantik, praktis, dan siap dibagikan ke semua tamu.", 130);
   const contact = profile.whatsapp || profile.instagram || profile.tiktok || profile.facebook || "Hubungi kami";
   const contactLabel = profile.whatsapp ? "Konsultasi via WhatsApp" : "Konsultasi undangan digital";
-  const titleLines = wrapText(title, isStory ? 21 : 18, 3);
-  const subtitleLines = wrapText(subtitle, isStory ? 34 : 28, 4);
-  const yStart = isStory ? 500 : 270;
+  const titleLines = wrapText(title, isStory ? 21 : 18, hasPhoto ? 2 : 3);
+  const subtitleLines = wrapText(subtitle, isStory ? 34 : 28, hasPhoto ? 3 : 4);
+  const yStart = hasPhoto ? (isStory ? 900 : 600) : isStory ? 500 : 270;
+  const photo = hasPhoto
+    ? {
+        x: 140,
+        y: isStory ? 250 : 160,
+        width: contentWidth - 120,
+        height: isStory ? 520 : 360,
+        radius: 34
+      }
+    : null;
 
   return `<?xml version="1.0" encoding="UTF-8"?>
 <svg width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" xmlns="http://www.w3.org/2000/svg">
@@ -276,6 +310,7 @@ export function renderPromoSvg(profile, payload, dimensions, format) {
   <circle cx="85" cy="${height - 90}" r="210" fill="${style.primary}" opacity="0.10"/>
   <rect x="80" y="${isStory ? 180 : 110}" width="${contentWidth}" height="${isStory ? 1560 : 860}" rx="42" fill="${style.panel}"/>
   <path d="M170 ${isStory ? 310 : 220} C310 ${isStory ? 210 : 120}, 430 ${isStory ? 410 : 300}, 560 ${isStory ? 290 : 190} S820 ${isStory ? 220 : 150}, 910 ${isStory ? 330 : 240}" fill="none" stroke="${style.accent}" stroke-width="7" stroke-linecap="round" opacity="0.75"/>
+  ${photo ? renderPhotoFrame(photo, options.photoDataUri, style) : ""}
   <text x="140" y="${yStart}" font-family="Arial, sans-serif" font-size="34" fill="${style.accent}" font-weight="700" letter-spacing="4">${escapeXml(profile.businessName.toUpperCase())}</text>
   ${renderTextLines(titleLines, 140, yStart + 115, isStory ? 82 : 76, 88, style.primary, 800)}
   ${renderTextLines(subtitleLines, 140, yStart + (titleLines.length * 88) + 95, isStory ? 38 : 34, 48, style.muted, 400)}
@@ -284,6 +319,19 @@ export function renderPromoSvg(profile, payload, dimensions, format) {
   <text x="180" y="${height - (isStory ? 265 : 125)}" font-family="Arial, sans-serif" font-size="${isStory ? 30 : 26}" fill="#FFFFFF" opacity="0.82">${escapeXml(contactLabel)}</text>
   <text x="140" y="${height - 90}" font-family="Arial, sans-serif" font-size="24" fill="${style.text}" opacity="0.55">Janji Nikah Partner</text>
 </svg>`;
+}
+
+function renderPhotoFrame(photo, photoDataUri, style) {
+  const clipId = `photo-${crypto.randomUUID()}`;
+
+  return `<defs>
+    <clipPath id="${clipId}">
+      <rect x="${photo.x}" y="${photo.y}" width="${photo.width}" height="${photo.height}" rx="${photo.radius}"/>
+    </clipPath>
+  </defs>
+  <rect x="${photo.x - 12}" y="${photo.y - 12}" width="${photo.width + 24}" height="${photo.height + 24}" rx="${photo.radius + 12}" fill="${style.accent}" opacity="0.20"/>
+  <image href="${photoDataUri}" x="${photo.x}" y="${photo.y}" width="${photo.width}" height="${photo.height}" preserveAspectRatio="xMidYMid slice" clip-path="url(#${clipId})"/>
+  <rect x="${photo.x}" y="${photo.y}" width="${photo.width}" height="${photo.height}" rx="${photo.radius}" fill="none" stroke="${style.panel}" stroke-width="10"/>`;
 }
 
 function buildContactLines(profile) {
@@ -350,6 +398,45 @@ function sanitizePhone(value) {
     .slice(0, 30);
 }
 
+async function processAndStorePromoPhoto(file, directory) {
+  ensureDirectory(directory);
+
+  const filePath = path.join(directory, `${crypto.randomUUID()}.webp`);
+
+  await sharp(file.buffer)
+    .rotate()
+    .resize({
+      width: env.imageMaxWidth,
+      withoutEnlargement: true
+    })
+    .webp({ quality: env.imageQuality })
+    .toFile(filePath);
+
+  return {
+    filePath,
+    publicUrl: toUploadUrl(filePath)
+  };
+}
+
+async function getPromoPhotoDataUri(publicUrl) {
+  const filePath = uploadUrlToFilePath(publicUrl);
+
+  if (!filePath) {
+    return "";
+  }
+
+  try {
+    const buffer = await fs.readFile(filePath);
+    return `data:image/webp;base64,${buffer.toString("base64")}`;
+  } catch (error) {
+    if (error.code === "ENOENT") {
+      return "";
+    }
+
+    throw error;
+  }
+}
+
 function escapeXml(value) {
   return String(value)
     .replace(/&/g, "&amp;")
@@ -360,12 +447,9 @@ function escapeXml(value) {
 }
 
 async function deleteUploadByUrl(publicUrl) {
-  if (!publicUrl?.startsWith("/uploads/")) {
-    return;
-  }
+  const filePath = uploadUrlToFilePath(publicUrl);
 
-  const relativePath = publicUrl.replace(/^\/uploads\//, "");
-  const filePath = path.join(resolveUploadPath(), relativePath);
+  if (!filePath) return;
 
   try {
     await fs.unlink(filePath);
@@ -373,5 +457,22 @@ async function deleteUploadByUrl(publicUrl) {
     if (error.code !== "ENOENT") {
       throw error;
     }
+  }
+}
+
+function uploadUrlToFilePath(publicUrl) {
+  const relativeUrl = toRelativeUploadUrl(publicUrl);
+
+  if (!relativeUrl?.startsWith("/uploads/")) {
+    return "";
+  }
+
+  const relativePath = relativeUrl.replace(/^\/uploads\//, "");
+  return path.join(resolveUploadPath(), relativePath);
+}
+
+function assertUploadedFile(file) {
+  if (!file) {
+    throw new AppError(400, "Foto promosi wajib diunggah.");
   }
 }

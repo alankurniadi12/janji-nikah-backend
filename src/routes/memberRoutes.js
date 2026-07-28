@@ -8,6 +8,7 @@ import {
 import {
   memberBrandingProfile,
   memberGenerateBranding,
+  memberUploadBrandingPhoto,
   memberUpsertBrandingProfile
 } from "../controllers/brandingController.js";
 import {
@@ -52,10 +53,12 @@ const paymentProofUpload = createImageUpload((req) =>
   resolveUploadPath("transactions", req.user._id.toString(), "proofs")
 );
 const invitationPhotoUpload = createMemoryImageUpload();
+const brandingPhotoUpload = createMemoryImageUpload();
 
 memberRoutes.use(authenticate, requireRole("member"));
 memberRoutes.get("/branding", memberBrandingProfile);
 memberRoutes.put("/branding", memberUpsertBrandingProfile);
+memberRoutes.post("/branding/photo", brandingPhotoUpload.single("photo"), memberUploadBrandingPhoto);
 memberRoutes.post("/branding/generate", memberGenerateBranding);
 memberRoutes.get("/dashboard", memberDashboard);
 memberRoutes.get("/invitations", memberInvitations);

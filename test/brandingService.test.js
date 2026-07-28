@@ -25,6 +25,7 @@ test("formats branding profile without exposing normalized business name", () =>
     tiktok: "",
     whatsapp: "+628123",
     selectedTemplate: "elegant",
+    promoPhotoUrl: "/uploads/photo.webp",
     promoAssets: {
       squareImageUrl: "/uploads/square.webp"
     }
@@ -33,6 +34,7 @@ test("formats branding profile without exposing normalized business name", () =>
   assert.equal(profile.id, "branding-id");
   assert.equal(profile.memberId, "member-id");
   assert.equal(profile.normalizedBusinessName, undefined);
+  assert.equal(profile.promoPhotoUrl, "/uploads/photo.webp");
   assert.equal(profile.promoAssets.squareImageUrl, "/uploads/square.webp");
 });
 
@@ -80,4 +82,34 @@ test("renders promo SVG that sharp can parse", async () => {
 
   assert.equal(metadata.width, 1080);
   assert.equal(metadata.height, 1080);
+});
+
+test("renders promo SVG with uploaded photo data", async () => {
+  const photoBuffer = await sharp({
+    create: {
+      width: 24,
+      height: 24,
+      channels: 3,
+      background: "#7A3E4D"
+    }
+  })
+    .webp()
+    .toBuffer();
+  const svg = renderPromoSvg(
+    {
+      businessName: "Ayu Wedding",
+      whatsapp: "+628123",
+      selectedTemplate: "elegant"
+    },
+    {},
+    { width: 1080, height: 1920 },
+    "story",
+    {
+      photoDataUri: `data:image/webp;base64,${photoBuffer.toString("base64")}`
+    }
+  );
+  const metadata = await sharp(Buffer.from(svg)).metadata();
+
+  assert.equal(metadata.width, 1080);
+  assert.equal(metadata.height, 1920);
 });

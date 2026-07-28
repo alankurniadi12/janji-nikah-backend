@@ -92,6 +92,14 @@ test("branding routes require authentication", async () => {
 
     assert.equal(generateResponse.status, 401);
     assert.equal(generateBody.message, "Akses membutuhkan token.");
+
+    const photoResponse = await fetch(`${baseUrl}/api/member/branding/photo`, {
+      method: "POST"
+    });
+    const photoBody = await photoResponse.json();
+
+    assert.equal(photoResponse.status, 401);
+    assert.equal(photoBody.message, "Akses membutuhkan token.");
   });
 });
 

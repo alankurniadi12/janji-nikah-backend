@@ -52,6 +52,10 @@ const brandingProfileSchema = new Schema(
       enum: ["elegant", "modern", "minimal"],
       default: "elegant"
     },
+    promoPhotoUrl: {
+      type: String,
+      default: ""
+    },
     promoAssets: {
       squareImageUrl: {
         type: String,
