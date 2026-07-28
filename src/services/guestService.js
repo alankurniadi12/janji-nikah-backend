@@ -36,13 +36,14 @@ export function toPublicRsvp(rsvp) {
   };
 }
 
-export function toPublicWish(wish) {
+export function toPublicWish(wish, rsvp = null) {
   return {
     id: wish._id.toString(),
     invitationId: wish.invitationId?.toString?.() || wish.invitationId,
     guestId: wish.guestId?.toString?.() || wish.guestId,
     displayName: wish.displayName,
     message: wish.message,
+    rsvpStatus: rsvp?.status || null,
     isHidden: wish.isHidden,
     hiddenAt: wish.hiddenAt,
     createdAt: wish.createdAt
@@ -162,7 +163,8 @@ export async function getGuestWhatsappMessage(member, invitationId, guestId) {
 export async function listMemberWishes(member, invitationId) {
   await findMemberInvitation(member, invitationId);
   const wishes = await Wish.find({ invitationId, deletedAt: null }).sort({ createdAt: -1 }).lean();
-  return wishes.map(toPublicWish);
+  const rsvpByGuestId = await getRsvpByGuestId(wishes);
+  return wishes.map((wish) => toPublicWish(wish, rsvpByGuestId.get(wish.guestId.toString())));
 }
 
 export async function hideMemberWish(member, invitationId, wishId) {
@@ -177,7 +179,8 @@ export async function hideMemberWish(member, invitationId, wishId) {
   wish.hiddenAt = new Date();
   await wish.save();
 
-  return toPublicWish(wish);
+  const rsvp = await RSVP.findOne({ guestId: wish.guestId }).lean();
+  return toPublicWish(wish, rsvp);
 }
 
 export async function deleteMemberWish(member, invitationId, wishId) {
@@ -217,4 +220,15 @@ async function createUniqueGuestToken() {
 function parseBulkGuestNames(names) {
   const rawNames = Array.isArray(names) ? names : String(names || "").split(/\r?\n/);
   return [...new Set(rawNames.map((name) => sanitizeGuestText(name, 100)).filter(Boolean))];
+}
+
+async function getRsvpByGuestId(wishes) {
+  const guestIds = [...new Set(wishes.map((wish) => wish.guestId?.toString()).filter(Boolean))];
+
+  if (guestIds.length === 0) {
+    return new Map();
+  }
+
+  const rsvps = await RSVP.find({ guestId: { $in: guestIds } }).lean();
+  return new Map(rsvps.map((rsvp) => [rsvp.guestId.toString(), rsvp]));
 }

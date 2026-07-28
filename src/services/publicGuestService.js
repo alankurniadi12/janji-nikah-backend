@@ -26,12 +26,13 @@ export async function getPublicGuestInvitation(username, slug, token) {
     .sort({ createdAt: -1 })
     .limit(50)
     .lean();
+  const rsvpByGuestId = await getRsvpByGuestId(wishes);
 
   return {
     ...publicInvitation,
     guest: toPublicGuest(guest),
     rsvp: toPublicRsvp(rsvp),
-    wishes: wishes.map(toPublicWish)
+    wishes: wishes.map((wish) => toPublicWish(wish, rsvpByGuestId.get(wish.guestId.toString())))
   };
 }
 
@@ -109,8 +110,9 @@ export async function submitPublicWish(username, slug, token, payload) {
     displayName,
     message
   });
+  const rsvp = await RSVP.findOne({ guestId: guest._id }).lean();
 
-  return toPublicWish(wish);
+  return toPublicWish(wish, rsvp);
 }
 
 async function findGuest(invitationId, token) {
@@ -121,4 +123,15 @@ async function findGuest(invitationId, token) {
   }
 
   return guest;
+}
+
+async function getRsvpByGuestId(wishes) {
+  const guestIds = [...new Set(wishes.map((wish) => wish.guestId?.toString()).filter(Boolean))];
+
+  if (guestIds.length === 0) {
+    return new Map();
+  }
+
+  const rsvps = await RSVP.find({ guestId: { $in: guestIds } }).lean();
+  return new Map(rsvps.map((rsvp) => [rsvp.guestId.toString(), rsvp]));
 }
