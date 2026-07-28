@@ -341,7 +341,7 @@ export function renderPromoSvg(profile, payload, dimensions, format, options = {
   <rect x="${contactBox.x}" y="${contactBox.y}" width="${contactBox.width}" height="${contactBox.height}" rx="${contactBox.radius}" fill="${style.primary}"/>
   <text x="${contactBox.textX}" y="${contactBox.y + contactBox.primaryTextY}" font-family="Arial, sans-serif" font-size="${contactBox.primaryFontSize}" fill="#FFFFFF" font-weight="700">${escapeXml(contact)}</text>
   <text x="${contactBox.textX}" y="${contactBox.y + contactBox.secondaryTextY}" font-family="Arial, sans-serif" font-size="${contactBox.secondaryFontSize}" fill="#FFFFFF" opacity="0.82">${escapeXml(contactLabel)}</text>
-  <text x="${layout.footerX}" y="${layout.footerY}" font-family="Arial, sans-serif" font-size="24" fill="${style.text}" opacity="0.55">Janji Nikah Partner</text>` : ""}
+  ${renderSocialFooter(profile, layout, style)}` : ""}
 </svg>`;
 }
 
@@ -572,6 +572,74 @@ function renderPhotoBorder(photo) {
 function renderTextOverlay(overlay, style) {
   return `<rect x="${overlay.x}" y="${overlay.y}" width="${overlay.width}" height="${overlay.height}" rx="${overlay.radius}" fill="${style.panel}" opacity="0.94"/>
   <rect x="${overlay.x}" y="${overlay.y}" width="${overlay.width}" height="8" rx="4" fill="${style.accent}" opacity="0.90"/>`;
+}
+
+function renderSocialFooter(profile, layout, style) {
+  const socials = [
+    profile.instagram
+      ? {
+          type: "instagram",
+          label: shortenSocialText(profile.instagram),
+          color: "#C13584"
+        }
+      : null,
+    profile.tiktok
+      ? {
+          type: "tiktok",
+          label: shortenSocialText(profile.tiktok),
+          color: "#111111"
+        }
+      : null,
+    profile.facebook
+      ? {
+          type: "facebook",
+          label: shortenSocialText(profile.facebook),
+          color: "#1877F2"
+        }
+      : null
+  ].filter(Boolean);
+
+  if (!socials.length) {
+    return `<text x="${layout.footerX}" y="${layout.footerY}" font-family="Arial, sans-serif" font-size="24" fill="${style.text}" opacity="0.55">Janji Nikah Partner</text>`;
+  }
+
+  const gap = 30;
+  const iconSize = 26;
+  const itemWidth = 260;
+  const totalWidth = socials.length * itemWidth + (socials.length - 1) * gap;
+  const startX = Math.max(layout.footerX, (1080 - totalWidth) / 2);
+
+  return socials
+    .map((social, index) => {
+      const x = startX + index * (itemWidth + gap);
+      const iconY = layout.footerY - 22;
+      const textY = layout.footerY;
+
+      return `${renderSocialIcon(social.type, x, iconY, iconSize, social.color)}
+  <text x="${x + iconSize + 10}" y="${textY}" font-family="Arial, sans-serif" font-size="22" fill="${style.text}" opacity="0.70" font-weight="700">${escapeXml(social.label)}</text>`;
+    })
+    .join("\n  ");
+}
+
+function renderSocialIcon(type, x, y, size, color) {
+  if (type === "instagram") {
+    return `<rect x="${x}" y="${y}" width="${size}" height="${size}" rx="7" fill="none" stroke="${color}" stroke-width="3"/>
+  <circle cx="${x + size / 2}" cy="${y + size / 2}" r="6" fill="none" stroke="${color}" stroke-width="3"/>
+  <circle cx="${x + size - 7}" cy="${y + 7}" r="2.5" fill="${color}"/>`;
+  }
+
+  if (type === "facebook") {
+    return `<circle cx="${x + size / 2}" cy="${y + size / 2}" r="${size / 2}" fill="${color}"/>
+  <text x="${x + 9}" y="${y + 22}" font-family="Arial, sans-serif" font-size="25" fill="#FFFFFF" font-weight="800">f</text>`;
+  }
+
+  return `<circle cx="${x + size / 2}" cy="${y + size / 2}" r="${size / 2}" fill="${color}"/>
+  <path d="M${x + 15} ${y + 7} V${y + 18} C${x + 15} ${y + 23}, ${x + 8} ${y + 23}, ${x + 8} ${y + 18} C${x + 8} ${y + 14}, ${x + 12} ${y + 13}, ${x + 15} ${y + 15} M${x + 15} ${y + 7} C${x + 18} ${y + 12}, ${x + 21} ${y + 13}, ${x + 23} ${y + 13}" fill="none" stroke="#FFFFFF" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>`;
+}
+
+function shortenSocialText(value) {
+  const text = sanitizeShortText(value, 28);
+  return text.length > 18 ? `${text.slice(0, 17)}...` : text;
 }
 
 function buildContactLines(profile) {
