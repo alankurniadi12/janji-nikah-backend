@@ -394,18 +394,12 @@ function getPromoTemplateLayout(template, dimensions, format, hasPhoto) {
       panel: basePanel,
       photo: {
         x: (dimensions.width - photoSize) / 2,
-        y: isStory ? 735 : 455,
+        y: isStory ? 660 : 410,
         width: photoSize,
         height: photoSize,
         radius: 36
       },
-      overlay: {
-        x: 110,
-        y: isStory ? 245 : 155,
-        width: contentWidth - 60,
-        height: isStory ? 430 : 250,
-        radius: 34
-      },
+      overlay: null,
       textX: 140,
       yStart: isStory ? 335 : 225,
       businessFontSize: 34,
@@ -419,7 +413,7 @@ function getPromoTemplateLayout(template, dimensions, format, hasPhoto) {
       titleMaxLines: isStory ? 2 : 1,
       subtitleMaxCharacters: isStory ? 36 : 30,
       subtitleMaxLines: 2,
-      subtitleY: isStory ? 1435 : 830,
+      subtitleY: isStory ? 1365 : 795,
       contactBox: {
         x: 140,
         y: dimensions.height - (isStory ? 390 : 180),
