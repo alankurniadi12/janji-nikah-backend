@@ -267,7 +267,7 @@ async function generatePromoImage(profile, payload, directory, format) {
   ensureDirectory(directory);
 
   const dimensions = format === "story" ? { width: 1080, height: 1920 } : { width: 1080, height: 1080 };
-  const filePath = path.join(directory, `${format}-${crypto.randomUUID()}.webp`);
+  const filePath = path.join(directory, `${format}-${crypto.randomUUID()}.jpg`);
   const photoBuffer = await getPromoPhotoBuffer(profile.promoPhotoUrl);
 
   if (photoBuffer) {
@@ -295,12 +295,12 @@ async function generatePromoImage(profile, payload, directory, format) {
           top: 0
         }
       ])
-      .webp({ quality: 90 })
+      .jpeg({ quality: 90, mozjpeg: true })
       .toFile(filePath);
   } else {
     const svg = renderPromoSvg(profile, payload, dimensions, format);
 
-    await sharp(Buffer.from(svg)).webp({ quality: 90 }).toFile(filePath);
+    await sharp(Buffer.from(svg)).jpeg({ quality: 90, mozjpeg: true }).toFile(filePath);
   }
 
   return {
