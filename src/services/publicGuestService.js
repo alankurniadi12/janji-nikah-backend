@@ -7,7 +7,7 @@ import { sanitizeGuestText } from "../utils/sanitizeText.js";
 import { toPublicGuest, toPublicRsvp, toPublicWish } from "./guestService.js";
 import { getPublicInvitation } from "./publicInvitationService.js";
 
-const MAX_WISH_MESSAGE_LENGTH = 500;
+const MAX_WISH_MESSAGE_LENGTH = 150;
 
 export async function getPublicGuestInvitation(username, slug, token) {
   const publicInvitation = await getPublicInvitation(username, slug);
