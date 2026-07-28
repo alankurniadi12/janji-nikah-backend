@@ -26,13 +26,12 @@ export async function getPublicGuestInvitation(username, slug, token) {
     .sort({ createdAt: -1 })
     .limit(50)
     .lean();
-  const rsvpByGuestId = await getRsvpByGuestId(wishes);
 
   return {
     ...publicInvitation,
     guest: toPublicGuest(guest),
     rsvp: toPublicRsvp(rsvp),
-    wishes: wishes.map((wish) => toPublicWish(wish, rsvpByGuestId.get(wish.guestId.toString())))
+    wishes: wishes.map(toPublicWish)
   };
 }
 
@@ -104,15 +103,16 @@ export async function submitPublicWish(username, slug, token, payload) {
     throw new AppError(400, `Ucapan maksimal ${MAX_WISH_MESSAGE_LENGTH} karakter.`);
   }
 
+  const rsvp = await RSVP.findOne({ guestId: guest._id }).lean();
   const wish = await Wish.create({
     invitationId: guest.invitationId,
     guestId: guest._id,
     displayName,
-    message
+    message,
+    rsvpStatus: rsvp?.status || null
   });
-  const rsvp = await RSVP.findOne({ guestId: guest._id }).lean();
 
-  return toPublicWish(wish, rsvp);
+  return toPublicWish(wish);
 }
 
 async function findGuest(invitationId, token) {
@@ -123,15 +123,4 @@ async function findGuest(invitationId, token) {
   }
 
   return guest;
-}
-
-async function getRsvpByGuestId(wishes) {
-  const guestIds = [...new Set(wishes.map((wish) => wish.guestId?.toString()).filter(Boolean))];
-
-  if (guestIds.length === 0) {
-    return new Map();
-  }
-
-  const rsvps = await RSVP.find({ guestId: { $in: guestIds } }).lean();
-  return new Map(rsvps.map((rsvp) => [rsvp.guestId.toString(), rsvp]));
 }

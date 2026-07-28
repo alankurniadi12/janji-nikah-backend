@@ -26,6 +26,11 @@ const wishSchema = new Schema(
       required: true,
       trim: true
     },
+    rsvpStatus: {
+      type: String,
+      enum: ["attending", "not_attending", null],
+      default: null
+    },
     isHidden: {
       type: Boolean,
       default: false,
