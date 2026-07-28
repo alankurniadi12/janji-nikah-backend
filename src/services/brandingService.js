@@ -335,9 +335,7 @@ export function renderPromoSvg(profile, payload, dimensions, format, options = {
   ${includeContent ? `
   ${renderAccentPath(layout, style, hasPhoto)}
   ${overlay ? renderTextOverlay(overlay, style) : ""}
-  <text x="${layout.textX}" y="${layout.yStart}" font-family="Arial, sans-serif" font-size="${layout.businessFontSize}" fill="${style.accent}" font-weight="700" letter-spacing="4">${escapeXml(profile.businessName.toUpperCase())}</text>
-  ${renderTextLines(titleLines, layout.textX, layout.yStart + layout.titleOffset, layout.titleFontSize, layout.titleLineHeight, style.primary, 800)}
-  ${renderTextLines(subtitleLines, layout.textX, layout.yStart + layout.titleOffset + (titleLines.length * layout.titleLineHeight) + layout.subtitleOffset, layout.subtitleFontSize, layout.subtitleLineHeight, style.muted, 400)}
+  ${renderPromoText(profile, titleLines, subtitleLines, layout, style)}
   <rect x="${contactBox.x}" y="${contactBox.y}" width="${contactBox.width}" height="${contactBox.height}" rx="${contactBox.radius}" fill="${style.primary}"/>
   <text x="${contactBox.textX}" y="${contactBox.y + contactBox.primaryTextY}" font-family="Arial, sans-serif" font-size="${contactBox.primaryFontSize}" fill="#FFFFFF" font-weight="700">${escapeXml(contact)}</text>
   <text x="${contactBox.textX}" y="${contactBox.y + contactBox.secondaryTextY}" font-family="Arial, sans-serif" font-size="${contactBox.secondaryFontSize}" fill="#FFFFFF" opacity="0.82">${escapeXml(contactLabel)}</text>
@@ -486,7 +484,8 @@ function getPromoTemplateLayout(template, dimensions, format, hasPhoto) {
       },
       footerX: 140,
       footerY: isStory ? dimensions.height - 90 : dimensions.height - 30,
-      accentVariant: "circle"
+      accentVariant: "circle",
+      textVariant: "centered"
     };
   }
 
@@ -547,6 +546,28 @@ function getMinimalPhotoLayout(dimensions, format) {
     footerY: isStory ? dimensions.height - 90 : dimensions.height - 35,
     accentVariant: "wave"
   };
+}
+
+function renderPromoText(profile, titleLines, subtitleLines, layout, style) {
+  if (layout.textVariant === "centered") {
+    const centerX = 540;
+    const pillWidth = 520;
+    const pillHeight = 54;
+    const pillX = centerX - pillWidth / 2;
+    const pillY = layout.yStart - 42;
+    const titleY = layout.yStart + layout.titleOffset;
+    const subtitleY = titleY + titleLines.length * layout.titleLineHeight + layout.subtitleOffset;
+
+    return `<rect x="${pillX}" y="${pillY}" width="${pillWidth}" height="${pillHeight}" rx="27" fill="${style.accent}" opacity="0.16"/>
+  <text x="${centerX}" y="${layout.yStart}" font-family="Arial, sans-serif" font-size="${layout.businessFontSize}" fill="${style.accent}" font-weight="800" letter-spacing="5" text-anchor="middle">${escapeXml(profile.businessName.toUpperCase())}</text>
+  ${renderCenteredTextLines(titleLines, centerX, titleY, layout.titleFontSize, layout.titleLineHeight, style.primary, 900)}
+  <path d="M${centerX - 145} ${titleY + titleLines.length * layout.titleLineHeight + 12} H${centerX + 145}" fill="none" stroke="${style.accent}" stroke-width="7" stroke-linecap="round" opacity="0.78"/>
+  ${renderCenteredTextLines(subtitleLines, centerX, subtitleY, layout.subtitleFontSize, layout.subtitleLineHeight, style.muted, 500)}`;
+  }
+
+  return `<text x="${layout.textX}" y="${layout.yStart}" font-family="Arial, sans-serif" font-size="${layout.businessFontSize}" fill="${style.accent}" font-weight="700" letter-spacing="4">${escapeXml(profile.businessName.toUpperCase())}</text>
+  ${renderTextLines(titleLines, layout.textX, layout.yStart + layout.titleOffset, layout.titleFontSize, layout.titleLineHeight, style.primary, 800)}
+  ${renderTextLines(subtitleLines, layout.textX, layout.yStart + layout.titleOffset + (titleLines.length * layout.titleLineHeight) + layout.subtitleOffset, layout.subtitleFontSize, layout.subtitleLineHeight, style.muted, 400)}`;
 }
 
 function renderAccentPath(layout, style, hasPhoto) {
@@ -660,6 +681,15 @@ function renderTextLines(lines, x, y, fontSize, lineHeight, fill, weight) {
     .map(
       (line, index) =>
         `<text x="${x}" y="${y + index * lineHeight}" font-family="Arial, sans-serif" font-size="${fontSize}" fill="${fill}" font-weight="${weight}">${escapeXml(line)}</text>`
+    )
+    .join("\n  ");
+}
+
+function renderCenteredTextLines(lines, x, y, fontSize, lineHeight, fill, weight) {
+  return lines
+    .map(
+      (line, index) =>
+        `<text x="${x}" y="${y + index * lineHeight}" font-family="Arial, sans-serif" font-size="${fontSize}" fill="${fill}" font-weight="${weight}" text-anchor="middle">${escapeXml(line)}</text>`
     )
     .join("\n  ");
 }
