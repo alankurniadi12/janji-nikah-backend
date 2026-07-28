@@ -1,8 +1,22 @@
+import multer from "multer";
+
+import { env } from "../config/env.js";
 import { AppError } from "../utils/AppError.js";
 
-function normalizeError(error) {
+export function normalizeError(error) {
   if (error instanceof AppError) {
     return error;
+  }
+
+  if (error instanceof multer.MulterError) {
+    if (error.code === "LIMIT_FILE_SIZE") {
+      return new AppError(
+        413,
+        `Ukuran file terlalu besar. Maksimal ${env.maxImageSizeMb} MB per file. Kompres gambar atau pilih file lain, lalu upload ulang.`
+      );
+    }
+
+    return new AppError(400, "File upload tidak valid. Periksa file yang dipilih, lalu coba lagi.");
   }
 
   if (error.name === "ValidationError") {
