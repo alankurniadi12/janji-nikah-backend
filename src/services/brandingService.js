@@ -435,7 +435,8 @@ function getPromoTemplateLayout(template, dimensions, format, hasPhoto) {
       },
       footerX: 140,
       footerY: isStory ? dimensions.height - 90 : dimensions.height - 30,
-      accentVariant: "corner"
+      accentVariant: "corner",
+      textVariant: "elegant"
     };
   }
 
@@ -549,6 +550,15 @@ function getMinimalPhotoLayout(dimensions, format) {
 }
 
 function renderPromoText(profile, titleLines, subtitleLines, layout, style) {
+  if (layout.textVariant === "elegant") {
+    const titleY = layout.yStart + layout.titleOffset;
+    const subtitleY = titleY + titleLines.length * layout.titleLineHeight + layout.subtitleOffset;
+
+    return `<text x="${layout.textX}" y="${layout.yStart}" font-family="Georgia, 'Times New Roman', serif" font-size="${layout.businessFontSize}" fill="${style.accent}" font-weight="700" letter-spacing="5">${escapeXml(profile.businessName.toUpperCase())}</text>
+  ${renderStyledTextLines(titleLines, layout.textX, titleY, layout.titleFontSize, layout.titleLineHeight, style.primary, 700, "Georgia, 'Times New Roman', serif", "italic")}
+  ${renderStyledTextLines(subtitleLines, layout.textX, subtitleY, layout.subtitleFontSize, layout.subtitleLineHeight, style.muted, 400, "Georgia, 'Times New Roman', serif", "normal")}`;
+  }
+
   if (layout.textVariant === "centered") {
     const centerX = 540;
     const pillWidth = 520;
@@ -690,6 +700,15 @@ function renderCenteredTextLines(lines, x, y, fontSize, lineHeight, fill, weight
     .map(
       (line, index) =>
         `<text x="${x}" y="${y + index * lineHeight}" font-family="Arial, sans-serif" font-size="${fontSize}" fill="${fill}" font-weight="${weight}" text-anchor="middle">${escapeXml(line)}</text>`
+    )
+    .join("\n  ");
+}
+
+function renderStyledTextLines(lines, x, y, fontSize, lineHeight, fill, weight, fontFamily, fontStyle) {
+  return lines
+    .map(
+      (line, index) =>
+        `<text x="${x}" y="${y + index * lineHeight}" font-family="${fontFamily}" font-size="${fontSize}" fill="${fill}" font-weight="${weight}" font-style="${fontStyle}">${escapeXml(line)}</text>`
     )
     .join("\n  ");
 }
