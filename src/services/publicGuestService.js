@@ -7,6 +7,8 @@ import { sanitizeGuestText } from "../utils/sanitizeText.js";
 import { toPublicGuest, toPublicRsvp, toPublicWish } from "./guestService.js";
 import { getPublicInvitation } from "./publicInvitationService.js";
 
+const MAX_WISH_MESSAGE_LENGTH = 500;
+
 export async function getPublicGuestInvitation(username, slug, token) {
   const publicInvitation = await getPublicInvitation(username, slug);
 
@@ -86,7 +88,8 @@ export async function submitPublicWish(username, slug, token, payload) {
 
   const guest = await findGuest(publicInvitation.invitation.id, token);
   const displayName = sanitizeGuestText(payload?.displayName || guest.name, 100);
-  const message = sanitizeGuestText(payload?.message, 500);
+  const rawMessage = String(payload?.message || "").trim();
+  const message = sanitizeGuestText(rawMessage, MAX_WISH_MESSAGE_LENGTH);
 
   if (!displayName) {
     throw new AppError(400, "Nama ucapan wajib diisi.");
@@ -94,6 +97,10 @@ export async function submitPublicWish(username, slug, token, payload) {
 
   if (!message) {
     throw new AppError(400, "Ucapan wajib diisi.");
+  }
+
+  if (rawMessage.length > MAX_WISH_MESSAGE_LENGTH) {
+    throw new AppError(400, `Ucapan maksimal ${MAX_WISH_MESSAGE_LENGTH} karakter.`);
   }
 
   const wish = await Wish.create({
