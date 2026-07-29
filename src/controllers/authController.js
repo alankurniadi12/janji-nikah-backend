@@ -1,4 +1,9 @@
-import { completeOnboarding, loginWithGoogle, refreshAuth } from "../services/authService.js";
+import {
+  completeOnboarding,
+  loginWithGoogle,
+  refreshAuth,
+  updateMemberSettings
+} from "../services/authService.js";
 import {
   clearRefreshCookie,
   REFRESH_COOKIE_NAME,
@@ -55,6 +60,17 @@ export const logout = asyncHandler(async (req, res) => {
 
 export const onboardMember = asyncHandler(async (req, res) => {
   const user = await completeOnboarding(req.user, req.body);
+
+  res.json({
+    success: true,
+    data: {
+      user
+    }
+  });
+});
+
+export const updateSettings = asyncHandler(async (req, res) => {
+  const user = await updateMemberSettings(req.user, req.body);
 
   res.json({
     success: true,

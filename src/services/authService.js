@@ -95,6 +95,25 @@ export async function completeOnboarding(user, payload) {
   return toPublicUser(user);
 }
 
+export async function updateMemberSettings(user, payload) {
+  if (user.role !== "member") {
+    throw new AppError(403, "Pengaturan ini hanya untuk member.");
+  }
+
+  if (!user.termsAcceptedAt) {
+    throw new AppError(400, "Selesaikan onboarding sebelum mengubah pengaturan.");
+  }
+
+  if (payload?.username === undefined) {
+    throw new AppError(400, "Username wajib dikirim.");
+  }
+
+  await applyUsernameChange(user, payload.username);
+  await user.save();
+
+  return toPublicUser(user);
+}
+
 export async function refreshAuth(refreshToken) {
   if (!refreshToken) {
     throw new AppError(401, "Sesi login tidak ditemukan. Silakan masuk ulang.");

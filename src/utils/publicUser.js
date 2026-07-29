@@ -7,6 +7,7 @@ export function toPublicUser(user) {
     role: user.role,
     status: user.status,
     username: user.username,
+    lastUsernameChangedAt: user.lastUsernameChangedAt,
     termsAcceptedAt: user.termsAcceptedAt,
     creditBalance: user.creditBalance,
     onboardingRequired: user.role === "member" && !user.termsAcceptedAt

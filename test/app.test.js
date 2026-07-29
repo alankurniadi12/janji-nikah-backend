@@ -58,6 +58,19 @@ test("auth routes return predictable validation errors", async () => {
     assert.equal(meResponse.status, 401);
     assert.equal(meBody.success, false);
     assert.equal(meBody.message, "Akses membutuhkan token.");
+
+    const settingsResponse = await fetch(`${baseUrl}/api/auth/settings`, {
+      method: "PATCH",
+      headers: {
+        "content-type": "application/json"
+      },
+      body: JSON.stringify({ username: "rio-undangan" })
+    });
+    const settingsBody = await settingsResponse.json();
+
+    assert.equal(settingsResponse.status, 401);
+    assert.equal(settingsBody.success, false);
+    assert.equal(settingsBody.message, "Akses membutuhkan token.");
   });
 });
 
