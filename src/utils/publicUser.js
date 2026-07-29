@@ -10,6 +10,7 @@ export function toPublicUser(user) {
     lastUsernameChangedAt: user.lastUsernameChangedAt,
     termsAcceptedAt: user.termsAcceptedAt,
     creditBalance: user.creditBalance,
+    createdAt: user.createdAt,
     onboardingRequired: user.role === "member" && !user.termsAcceptedAt
   };
 }
