@@ -2,7 +2,7 @@ import Invitation from "../models/Invitation.js";
 import Notification from "../models/Notification.js";
 import Transaction from "../models/Transaction.js";
 import User from "../models/User.js";
-import { expirePendingTransactions } from "./transactionService.js";
+import { expirePendingTransactions, toPublicTransaction } from "./transactionService.js";
 
 export async function getMemberDashboard(user) {
   const memberId = user._id;
@@ -14,7 +14,9 @@ export async function getMemberDashboard(user) {
     draftInvitations,
     expiredInvitations,
     unreadNotifications,
-    latestTransaction
+    latestTransaction,
+    pendingTransactions,
+    pendingTransactionCount
   ] = await Promise.all([
     Invitation.countDocuments({ memberId, status: { $in: ["active", "locked"] } }),
     Invitation.countDocuments({ memberId, status: "draft" }),
@@ -26,8 +28,14 @@ export async function getMemberDashboard(user) {
     }),
     Transaction.findOne({ memberId })
       .sort({ createdAt: -1 })
-      .select("creditAmount totalAmount status createdAt")
-      .lean()
+      .select("memberId packageId creditAmount baseAmount uniqueCode totalAmount paymentProofUrl status adminNote expiresAt createdAt updatedAt")
+      .lean(),
+    Transaction.find({ memberId, status: { $in: ["waiting_payment", "waiting_verification"] } })
+      .sort({ status: 1, expiresAt: 1, createdAt: -1 })
+      .limit(3)
+      .select("memberId packageId creditAmount baseAmount uniqueCode totalAmount paymentProofUrl status adminNote expiresAt createdAt updatedAt")
+      .lean(),
+    Transaction.countDocuments({ memberId, status: { $in: ["waiting_payment", "waiting_verification"] } })
   ]);
 
   return {
@@ -40,7 +48,11 @@ export async function getMemberDashboard(user) {
     notifications: {
       unread: unreadNotifications
     },
-    latestTransaction: latestTransaction || null,
+    latestTransaction: latestTransaction ? toPublicTransaction(latestTransaction) : null,
+    pendingTransactions: {
+      total: pendingTransactionCount,
+      items: pendingTransactions.map(toPublicTransaction)
+    },
     actions: {
       canCreateInvitation: draftInvitations < 3,
       draftLimit: 3
