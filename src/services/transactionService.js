@@ -26,8 +26,8 @@ export async function expirePendingTransactions(filter = {}) {
 export function toPublicTransaction(transaction) {
   return {
     id: transaction._id.toString(),
-    memberId: transaction.memberId?.toString?.() || transaction.memberId,
-    packageId: transaction.packageId?.toString?.() || transaction.packageId,
+    memberId: toIdString(transaction.memberId),
+    packageId: toIdString(transaction.packageId),
     creditAmount: transaction.creditAmount,
     baseAmount: transaction.baseAmount,
     uniqueCode: transaction.uniqueCode,
@@ -42,6 +42,34 @@ export function toPublicTransaction(transaction) {
     expiresAt: transaction.expiresAt,
     createdAt: transaction.createdAt,
     updatedAt: transaction.updatedAt
+  };
+}
+
+export function toPublicAdminTransaction(transaction) {
+  const member = transaction.memberId && typeof transaction.memberId === "object" ? transaction.memberId : null;
+  const creditPackage = transaction.packageId && typeof transaction.packageId === "object" ? transaction.packageId : null;
+
+  return {
+    ...toPublicTransaction(transaction),
+    member: member
+      ? {
+          id: member._id.toString(),
+          name: member.name,
+          email: member.email,
+          username: member.username,
+          status: member.status,
+          creditBalance: member.creditBalance
+        }
+      : null,
+    package: creditPackage
+      ? {
+          id: creditPackage._id.toString(),
+          name: creditPackage.name,
+          creditAmount: creditPackage.creditAmount,
+          price: creditPackage.price,
+          isActive: creditPackage.isActive
+        }
+      : null
   };
 }
 
@@ -118,20 +146,27 @@ export async function listAdminTransactions({ status } = {}) {
   await expirePendingTransactions();
 
   const query = status ? { status } : {};
-  const transactions = await Transaction.find(query).sort({ createdAt: -1 }).lean();
-  return transactions.map(toPublicTransaction);
+  const transactions = await Transaction.find(query)
+    .sort({ createdAt: -1 })
+    .populate("memberId", "name email username status creditBalance")
+    .populate("packageId", "name creditAmount price isActive")
+    .lean();
+  return transactions.map(toPublicAdminTransaction);
 }
 
 export async function getAdminTransaction(transactionId) {
   await expirePendingTransactions({ _id: transactionId });
 
-  const transaction = await Transaction.findById(transactionId).lean();
+  const transaction = await Transaction.findById(transactionId)
+    .populate("memberId", "name email username status creditBalance")
+    .populate("packageId", "name creditAmount price isActive")
+    .lean();
 
   if (!transaction) {
     throw new AppError(404, "Transaksi tidak ditemukan.");
   }
 
-  return toPublicTransaction(transaction);
+  return toPublicAdminTransaction(transaction);
 }
 
 export async function approveTransaction(admin, transactionId, note = "") {
@@ -193,7 +228,7 @@ export async function approveTransaction(admin, transactionId, note = "") {
     note
   });
 
-  return toPublicTransaction(approvedTransaction);
+  return getAdminTransaction(approvedTransaction._id);
 }
 
 export async function rejectTransaction(admin, transactionId, note = "") {
@@ -228,5 +263,21 @@ export async function rejectTransaction(admin, transactionId, note = "") {
     note
   });
 
-  return toPublicTransaction(transaction);
+  return getAdminTransaction(transaction._id);
+}
+
+function toIdString(value) {
+  if (!value) {
+    return null;
+  }
+
+  if (value._id) {
+    return value._id.toString();
+  }
+
+  if (typeof value.toString === "function" && value.toString !== Object.prototype.toString) {
+    return value.toString();
+  }
+
+  return value;
 }
