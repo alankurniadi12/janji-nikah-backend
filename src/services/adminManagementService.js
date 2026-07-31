@@ -1,8 +1,13 @@
 import AuditLog from "../models/AuditLog.js";
 import CreditLedger from "../models/CreditLedger.js";
+import Guest from "../models/Guest.js";
 import Invitation from "../models/Invitation.js";
+import Music from "../models/Music.js";
+import RSVP from "../models/RSVP.js";
+import Theme from "../models/Theme.js";
 import Transaction from "../models/Transaction.js";
 import User from "../models/User.js";
+import Wish from "../models/Wish.js";
 import { AppError } from "../utils/AppError.js";
 import { toPublicInvitation } from "./invitationService.js";
 import { toPublicUser } from "../utils/publicUser.js";
@@ -127,7 +132,16 @@ export async function adjustMemberCredits(admin, memberId, payload) {
 export async function listAdminInvitations({ status } = {}) {
   const query = status ? { status } : {};
   const invitations = await Invitation.find(query).sort({ createdAt: -1 }).limit(100).lean();
-  return invitations.map(toPublicInvitation);
+  const memberIds = [...new Set(invitations.map((invitation) => invitation.memberId?.toString()).filter(Boolean))];
+  const members = await User.find({ _id: { $in: memberIds } })
+    .select("name email username status creditBalance")
+    .lean();
+  const memberMap = new Map(members.map((member) => [member._id.toString(), toMemberSummary(member)]));
+
+  return invitations.map((invitation) => ({
+    ...toPublicInvitation(invitation),
+    member: memberMap.get(invitation.memberId?.toString()) || null
+  }));
 }
 
 export async function getAdminInvitation(invitationId) {
@@ -137,14 +151,24 @@ export async function getAdminInvitation(invitationId) {
     throw new AppError(404, "Undangan tidak ditemukan.");
   }
 
-  return toPublicInvitation(invitation);
+  return toAdminInvitationDetail(invitation);
 }
 
 export async function unlockInvitation(admin, invitationId, note = "") {
+  const trimmedNote = String(note || "").trim();
+
+  if (!trimmedNote) {
+    throw new AppError(400, "Catatan unlock undangan wajib diisi.");
+  }
+
   const invitation = await Invitation.findById(invitationId);
 
   if (!invitation) {
     throw new AppError(404, "Undangan tidak ditemukan.");
+  }
+
+  if (invitation.status !== "locked") {
+    throw new AppError(409, "Hanya undangan terkunci yang bisa di-unlock.");
   }
 
   const before = invitation.toObject();
@@ -159,10 +183,10 @@ export async function unlockInvitation(admin, invitationId, note = "") {
     targetId: invitation._id,
     before,
     after: invitation.toObject(),
-    note
+    note: trimmedNote
   });
 
-  return toPublicInvitation(invitation);
+  return toAdminInvitationDetail(invitation.toObject());
 }
 
 export async function listAuditLogs() {
@@ -211,6 +235,143 @@ async function getMemberActivity(memberId) {
       invitations: invitations.length,
       creditEvents: creditLedgers.length
     }
+  };
+}
+
+async function toAdminInvitationDetail(invitation) {
+  const [member, theme, music, stats, recentGuests, recentWishes, creditLedgers] = await Promise.all([
+    User.findById(invitation.memberId).select("name email username status creditBalance createdAt").lean(),
+    invitation.themeId ? Theme.findById(invitation.themeId).lean() : null,
+    invitation.musicId ? Music.findById(invitation.musicId).lean() : null,
+    getInvitationStats(invitation._id),
+    Guest.find({ invitationId: invitation._id }).sort({ updatedAt: -1 }).limit(8).lean(),
+    Wish.find({ invitationId: invitation._id }).sort({ updatedAt: -1 }).limit(8).lean(),
+    CreditLedger.find({ referenceType: "invitation", referenceId: invitation._id })
+      .sort({ createdAt: -1 })
+      .limit(8)
+      .lean()
+  ]);
+  const publicInvitation = toPublicInvitation(invitation);
+
+  return {
+    ...publicInvitation,
+    member: member ? toMemberSummary(member) : null,
+    theme: theme ? toThemeSummary(theme) : null,
+    music: music ? toMusicSummary(music) : null,
+    statistics: stats,
+    recentGuests: recentGuests.map(toGuestSummary),
+    recentWishes: recentWishes.map(toWishSummary),
+    creditLedgers: creditLedgers.map(toCreditLedgerSummary),
+    links: {
+      publicPath: member?.username && publicInvitation.slug ? `/${member.username}/${publicInvitation.slug}` : "",
+      previewPath: member?.username && publicInvitation.slug ? `/${member.username}/${publicInvitation.slug}?preview=true` : ""
+    },
+    permissions: {
+      canUnlock: publicInvitation.status === "locked"
+    }
+  };
+}
+
+async function getInvitationStats(invitationId) {
+  const [guestCount, sentGuestCount, openedGuestCount, attendingCount, notAttendingCount, wishCount, hiddenWishCount, deletedWishCount] =
+    await Promise.all([
+      Guest.countDocuments({ invitationId }),
+      Guest.countDocuments({ invitationId, sentStatus: "sent" }),
+      Guest.countDocuments({ invitationId, openedAt: { $exists: true, $ne: null } }),
+      RSVP.countDocuments({ invitationId, status: "attending" }),
+      RSVP.countDocuments({ invitationId, status: "not_attending" }),
+      Wish.countDocuments({ invitationId, deletedAt: null }),
+      Wish.countDocuments({ invitationId, isHidden: true, deletedAt: null }),
+      Wish.countDocuments({ invitationId, deletedAt: { $exists: true, $ne: null } })
+    ]);
+
+  return {
+    guests: {
+      total: guestCount,
+      sent: sentGuestCount,
+      opened: openedGuestCount
+    },
+    rsvp: {
+      attending: attendingCount,
+      notAttending: notAttendingCount,
+      total: attendingCount + notAttendingCount
+    },
+    wishes: {
+      total: wishCount,
+      visible: Math.max(0, wishCount - hiddenWishCount),
+      hidden: hiddenWishCount,
+      deleted: deletedWishCount
+    }
+  };
+}
+
+function toMemberSummary(member) {
+  return {
+    id: member._id.toString(),
+    name: member.name,
+    email: member.email,
+    username: member.username,
+    status: member.status,
+    creditBalance: member.creditBalance,
+    createdAt: member.createdAt
+  };
+}
+
+function toThemeSummary(theme) {
+  return {
+    id: theme._id.toString(),
+    name: theme.name,
+    key: theme.key,
+    thumbnailUrl: theme.thumbnailUrl,
+    isActive: theme.isActive,
+    isPublicDemo: theme.isPublicDemo
+  };
+}
+
+function toMusicSummary(music) {
+  return {
+    id: music._id.toString(),
+    title: music.title,
+    category: music.category,
+    duration: music.duration,
+    isActive: music.isActive
+  };
+}
+
+function toGuestSummary(guest) {
+  return {
+    id: guest._id.toString(),
+    name: guest.name,
+    sentStatus: guest.sentStatus,
+    sentAt: guest.sentAt,
+    openedAt: guest.openedAt,
+    createdAt: guest.createdAt,
+    updatedAt: guest.updatedAt
+  };
+}
+
+function toWishSummary(wish) {
+  return {
+    id: wish._id.toString(),
+    displayName: wish.displayName,
+    message: wish.message,
+    rsvpStatus: wish.rsvpStatus,
+    isHidden: wish.isHidden,
+    hiddenAt: wish.hiddenAt,
+    deletedAt: wish.deletedAt,
+    createdAt: wish.createdAt,
+    updatedAt: wish.updatedAt
+  };
+}
+
+function toCreditLedgerSummary(ledger) {
+  return {
+    id: ledger._id.toString(),
+    type: ledger.type,
+    amount: ledger.amount,
+    balanceAfter: ledger.balanceAfter,
+    note: ledger.note,
+    createdAt: ledger.createdAt
   };
 }
 
