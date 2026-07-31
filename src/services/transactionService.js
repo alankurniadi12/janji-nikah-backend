@@ -79,7 +79,7 @@ export function toPublicAdminTransaction(transaction) {
   };
 }
 
-export async function createMemberTransaction(member, packageId) {
+export async function createMemberTransaction(member, packageId, promoCode = "") {
   if (!packageId) {
     throw new AppError(400, "Paket kredit wajib dipilih.");
   }
@@ -95,6 +95,10 @@ export async function createMemberTransaction(member, packageId) {
     throw new AppError(404, "Paket kredit tidak aktif, belum mulai, sudah berakhir, atau tidak ditemukan.");
   }
 
+  if (creditPackage.promoCode && normalizePromoCode(promoCode) !== creditPackage.promoCode) {
+    throw new AppError(400, "Kode promo wajib diisi dan harus sesuai paket yang dipilih.");
+  }
+
   if (creditPackage.price <= 0 && creditPackage.promoCode) {
     throw new AppError(409, "Paket promo gratis wajib diklaim dengan kode promo.");
   }
@@ -108,6 +112,7 @@ export async function createMemberTransaction(member, packageId) {
     uniqueCode,
     totalAmount: calculateTotalAmount(creditPackage.price, uniqueCode),
     paymentMethod: "manual_transfer",
+    promoCode: creditPackage.promoCode || "",
     status: "waiting_payment",
     expiresAt: new Date(Date.now() + TRANSACTION_EXPIRY_MS)
   });
