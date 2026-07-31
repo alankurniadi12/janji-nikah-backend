@@ -28,3 +28,25 @@ test("formats credit package for API responses", () => {
   assert.equal(creditPackage.availabilityStatus, "available");
   assert.ok(creditPackage.countdownEndsAt);
 });
+
+test("can hide promo code value for member package responses", () => {
+  const creditPackage = toPublicCreditPackage(
+    {
+      _id: { toString: () => "package-id" },
+      name: "Promo Gratis",
+      creditAmount: 1,
+      price: 0,
+      isActive: true,
+      promoCode: "RAHASIA",
+      startsAt: null,
+      endsAt: null,
+      deletedAt: null,
+      createdAt: new Date("2026-07-16T10:00:00.000Z"),
+      updatedAt: new Date("2026-07-16T11:00:00.000Z")
+    },
+    { includePromoCode: false }
+  );
+
+  assert.equal(creditPackage.promoCode, "");
+  assert.equal(creditPackage.hasPromoCode, true);
+});

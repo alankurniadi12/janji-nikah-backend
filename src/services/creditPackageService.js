@@ -3,7 +3,7 @@ import AuditLog from "../models/AuditLog.js";
 import Transaction from "../models/Transaction.js";
 import { AppError } from "../utils/AppError.js";
 
-export function toPublicCreditPackage(creditPackage) {
+export function toPublicCreditPackage(creditPackage, { includePromoCode = true } = {}) {
   const now = new Date();
   const startsAt = creditPackage.startsAt || null;
   const endsAt = creditPackage.endsAt || null;
@@ -15,7 +15,8 @@ export function toPublicCreditPackage(creditPackage) {
     creditAmount: creditPackage.creditAmount,
     price: creditPackage.price,
     isActive: creditPackage.isActive,
-    promoCode: creditPackage.promoCode || "",
+    promoCode: includePromoCode ? creditPackage.promoCode || "" : "",
+    hasPromoCode: Boolean(creditPackage.promoCode),
     startsAt,
     endsAt,
     deletedAt: creditPackage.deletedAt || null,
@@ -32,7 +33,7 @@ export async function listActiveCreditPackages() {
   await expireElapsedCreditPackages();
 
   const packages = await CreditPackage.find(buildActivePackageQuery(new Date())).sort({ creditAmount: 1, price: 1 }).lean();
-  return packages.map(toPublicCreditPackage);
+  return packages.map((creditPackage) => toPublicCreditPackage(creditPackage, { includePromoCode: false }));
 }
 
 export async function listAdminCreditPackages() {

@@ -6,6 +6,7 @@ import {
   getMemberTransaction,
   listAdminTransactions,
   listMemberTransactions,
+  redeemMemberPromoCode,
   rejectTransaction
 } from "../services/transactionService.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
@@ -13,6 +14,17 @@ import { toUploadUrl } from "../utils/fileUrl.js";
 
 export const memberCreateTransaction = asyncHandler(async (req, res) => {
   const transaction = await createMemberTransaction(req.user, req.body.packageId);
+
+  res.status(201).json({
+    success: true,
+    data: {
+      transaction
+    }
+  });
+});
+
+export const memberRedeemPromoCode = asyncHandler(async (req, res) => {
+  const transaction = await redeemMemberPromoCode(req.user, req.body.promoCode);
 
   res.status(201).json({
     success: true,

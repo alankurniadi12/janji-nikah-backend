@@ -37,6 +37,7 @@ import {
 } from "../controllers/invitationController.js";
 import {
   memberCreateTransaction,
+  memberRedeemPromoCode,
   memberTransactionDetail,
   memberTransactions,
   memberUploadPaymentProof
@@ -92,6 +93,7 @@ memberRoutes.delete("/invitations/:id/wishes/:wishId", memberDeleteWish);
 memberRoutes.get("/notifications", memberNotifications);
 memberRoutes.patch("/notifications/:id/read", readMemberNotification);
 memberRoutes.post("/transactions", memberCreateTransaction);
+memberRoutes.post("/transactions/promo-code", memberRedeemPromoCode);
 memberRoutes.get("/transactions", memberTransactions);
 memberRoutes.get("/transactions/:id", memberTransactionDetail);
 memberRoutes.post(

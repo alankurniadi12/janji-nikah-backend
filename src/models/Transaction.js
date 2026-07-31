@@ -28,8 +28,21 @@ const transactionSchema = new Schema(
     uniqueCode: {
       type: Number,
       required: true,
-      min: 100,
+      min: 0,
       max: 999
+    },
+    paymentMethod: {
+      type: String,
+      enum: ["manual_transfer", "promo_code"],
+      default: "manual_transfer",
+      required: true,
+      index: true
+    },
+    promoCode: {
+      type: String,
+      default: "",
+      trim: true,
+      uppercase: true
     },
     totalAmount: {
       type: Number,

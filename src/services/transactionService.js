@@ -33,6 +33,8 @@ export function toPublicTransaction(transaction) {
     baseAmount: transaction.baseAmount,
     uniqueCode: transaction.uniqueCode,
     totalAmount: transaction.totalAmount,
+    paymentMethod: transaction.paymentMethod || "manual_transfer",
+    promoCode: transaction.promoCode || "",
     paymentProofUrl: transaction.paymentProofUrl,
     status: transaction.status,
     adminNote: transaction.adminNote,
@@ -93,6 +95,10 @@ export async function createMemberTransaction(member, packageId) {
     throw new AppError(404, "Paket kredit tidak aktif, belum mulai, sudah berakhir, atau tidak ditemukan.");
   }
 
+  if (creditPackage.price <= 0 && creditPackage.promoCode) {
+    throw new AppError(409, "Paket promo gratis wajib diklaim dengan kode promo.");
+  }
+
   const uniqueCode = createUniquePaymentCode();
   const transaction = await Transaction.create({
     memberId: member._id,
@@ -101,8 +107,81 @@ export async function createMemberTransaction(member, packageId) {
     baseAmount: creditPackage.price,
     uniqueCode,
     totalAmount: calculateTotalAmount(creditPackage.price, uniqueCode),
+    paymentMethod: "manual_transfer",
     status: "waiting_payment",
     expiresAt: new Date(Date.now() + TRANSACTION_EXPIRY_MS)
+  });
+
+  return toPublicTransaction(transaction);
+}
+
+export async function redeemMemberPromoCode(member, promoCode) {
+  const normalizedPromoCode = normalizePromoCode(promoCode);
+
+  if (!normalizedPromoCode) {
+    throw new AppError(400, "Kode promo wajib diisi.");
+  }
+
+  await expireElapsedCreditPackages();
+
+  const creditPackage = await CreditPackage.findOne({
+    promoCode: normalizedPromoCode,
+    ...buildActivePackageQuery(new Date())
+  });
+
+  if (!creditPackage) {
+    throw new AppError(404, "Kode promo tidak valid, belum mulai, sudah berakhir, atau tidak aktif.");
+  }
+
+  if (creditPackage.price > 0) {
+    throw new AppError(409, "Kode promo ini masih membutuhkan pembayaran manual.");
+  }
+
+  const alreadyRedeemed = await Transaction.exists({
+    memberId: member._id,
+    packageId: creditPackage._id,
+    paymentMethod: "promo_code",
+    status: "success"
+  });
+
+  if (alreadyRedeemed) {
+    throw new AppError(409, "Kode promo ini sudah pernah diklaim oleh akun kamu.");
+  }
+
+  const creditedMember = await User.findByIdAndUpdate(
+    member._id,
+    { $inc: { creditBalance: creditPackage.creditAmount } },
+    { new: true }
+  );
+
+  if (!creditedMember) {
+    throw new AppError(404, "Member tidak ditemukan.");
+  }
+
+  const transaction = await Transaction.create({
+    memberId: member._id,
+    packageId: creditPackage._id,
+    creditAmount: creditPackage.creditAmount,
+    baseAmount: 0,
+    uniqueCode: 0,
+    totalAmount: 0,
+    paymentMethod: "promo_code",
+    promoCode: normalizedPromoCode,
+    status: "success",
+    adminNote: `Klaim kode promo ${normalizedPromoCode}.`,
+    approvedAt: new Date(),
+    expiresAt: new Date()
+  });
+
+  await CreditLedger.create({
+    memberId: member._id,
+    type: "purchase",
+    amount: creditPackage.creditAmount,
+    balanceAfter: creditedMember.creditBalance,
+    referenceType: "transaction",
+    referenceId: transaction._id,
+    note: `Klaim kode promo ${normalizedPromoCode}.`,
+    createdBy: member._id
   });
 
   return toPublicTransaction(transaction);
@@ -289,4 +368,8 @@ function toIdString(value) {
   }
 
   return value;
+}
+
+function normalizePromoCode(value) {
+  return String(value || "").trim().toUpperCase();
 }
