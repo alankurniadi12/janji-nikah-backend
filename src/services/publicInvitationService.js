@@ -1,4 +1,5 @@
 import Invitation from "../models/Invitation.js";
+import Theme from "../models/Theme.js";
 import User from "../models/User.js";
 import { AppError } from "../utils/AppError.js";
 import { lockInvitationIfNeeded, toPublicInvitation } from "./invitationService.js";
@@ -48,7 +49,7 @@ export async function getPublicInvitation(username, slug, options = {}) {
       isActive: false,
       isPreview: true,
       redirectUsername,
-      invitation: toPublicInvitation(invitation)
+      invitation: await toPublicInvitationWithTheme(invitation)
     };
   }
 
@@ -59,7 +60,25 @@ export async function getPublicInvitation(username, slug, options = {}) {
   return {
     isActive: true,
     redirectUsername,
-    invitation: toPublicInvitation(invitation)
+    invitation: await toPublicInvitationWithTheme(invitation)
+  };
+}
+
+async function toPublicInvitationWithTheme(invitation) {
+  const theme = invitation.themeId ? await Theme.findById(invitation.themeId).lean() : null;
+
+  return {
+    ...toPublicInvitation(invitation),
+    theme: theme
+      ? {
+          id: theme._id.toString(),
+          name: theme.name,
+          key: theme.key,
+          thumbnailUrl: theme.thumbnailUrl,
+          isActive: theme.isActive,
+          isPublicDemo: theme.isPublicDemo
+        }
+      : null
   };
 }
 

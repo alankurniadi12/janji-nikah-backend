@@ -1,5 +1,6 @@
 import Invitation from "../models/Invitation.js";
 import CreditLedger from "../models/CreditLedger.js";
+import Theme from "../models/Theme.js";
 import User from "../models/User.js";
 import { AppError } from "../utils/AppError.js";
 import { toAbsoluteUploadUrl } from "../utils/fileUrl.js";
@@ -29,6 +30,7 @@ export function toPublicInvitation(invitation) {
     expiresAt: invitation.expiresAt,
     expiredAt: invitation.expiredAt,
     summary: invitation.summary,
+    theme: invitation.theme || null,
     createdAt: invitation.createdAt,
     updatedAt: invitation.updatedAt
   };
@@ -164,6 +166,7 @@ export async function publishMemberInvitation(member, invitationId) {
 
   const latestEventDate = getLatestEventDate(invitation.events);
   const publishedAt = new Date();
+  const theme = invitation.themeId ? await Theme.findById(invitation.themeId).lean() : null;
   invitation.status = "active";
   invitation.publishedAt = publishedAt;
   invitation.expiresAt = addDays(latestEventDate, INVITATION_EXPIRE_AFTER_EVENT_DAYS);
@@ -171,7 +174,8 @@ export async function publishMemberInvitation(member, invitationId) {
     groomName: invitation.groom.fullName,
     brideName: invitation.bride.fullName,
     latestEventDate,
-    themeName: "",
+    themeName: theme?.name || "",
+    themeKey: theme?.key || "",
     publishedAt
   };
 
