@@ -26,9 +26,14 @@ export function normalizeError(error) {
   }
 
   if (error.code === 11000) {
-    return new AppError(409, "Data sudah digunakan.", {
-      fields: Object.keys(error.keyPattern || {})
-    });
+    const fields = Object.keys(error.keyPattern || {});
+    const messages = {
+      promoCode: "Kode promo sudah dipakai paket lain.",
+      email: "Email sudah digunakan.",
+      username: "Username sudah digunakan."
+    };
+
+    return new AppError(409, messages[fields[0]] || "Data sudah digunakan.", { fields });
   }
 
   if (error.name === "CastError") {

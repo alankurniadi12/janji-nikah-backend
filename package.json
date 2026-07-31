@@ -10,7 +10,8 @@
     "check": "find src scripts test -name '*.js' -print0 | xargs -0 -n1 node --check",
     "test": "NODE_ENV=test node --test",
     "seed:admin": "node scripts/seedAdmin.js",
-    "seed:credit-packages": "node scripts/seedCreditPackages.js"
+    "seed:credit-packages": "node scripts/seedCreditPackages.js",
+    "fix:credit-package-indexes": "node scripts/fixCreditPackageIndexes.js"
   },
   "dependencies": {
     "cookie-parser": "^1.4.6",
