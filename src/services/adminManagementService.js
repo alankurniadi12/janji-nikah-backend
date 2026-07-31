@@ -1,6 +1,7 @@
 import AuditLog from "../models/AuditLog.js";
 import CreditLedger from "../models/CreditLedger.js";
 import Invitation from "../models/Invitation.js";
+import Transaction from "../models/Transaction.js";
 import User from "../models/User.js";
 import { AppError } from "../utils/AppError.js";
 import { toPublicInvitation } from "./invitationService.js";
@@ -29,7 +30,12 @@ export async function getMemberDetail(memberId) {
     throw new AppError(404, "Member tidak ditemukan.");
   }
 
-  return toPublicUser(member);
+  const activity = await getMemberActivity(member._id);
+
+  return {
+    ...toPublicUser(member),
+    activity
+  };
 }
 
 export async function updateMemberStatus(admin, memberId, status) {
@@ -172,4 +178,122 @@ export async function listAuditLogs() {
     note: log.note,
     createdAt: log.createdAt
   }));
+}
+
+async function getMemberActivity(memberId) {
+  const [transactions, invitations, creditLedgers] = await Promise.all([
+    Transaction.find({ memberId })
+      .sort({ updatedAt: -1 })
+      .limit(8)
+      .select("creditAmount totalAmount uniqueCode status adminNote approvedAt rejectedAt expiresAt createdAt updatedAt")
+      .lean(),
+    Invitation.find({ memberId })
+      .sort({ updatedAt: -1 })
+      .limit(8)
+      .select("status slug title groom bride publishedAt lockedAt expiresAt expiredAt createdAt updatedAt")
+      .lean(),
+    CreditLedger.find({ memberId })
+      .sort({ createdAt: -1 })
+      .limit(8)
+      .select("type amount balanceAfter referenceType referenceId note createdAt")
+      .lean()
+  ]);
+  const items = [
+    ...transactions.map(toTransactionActivity),
+    ...invitations.map(toInvitationActivity),
+    ...creditLedgers.map(toCreditLedgerActivity)
+  ].sort((left, right) => new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime());
+
+  return {
+    items: items.slice(0, 15),
+    summary: {
+      transactions: transactions.length,
+      invitations: invitations.length,
+      creditEvents: creditLedgers.length
+    }
+  };
+}
+
+function toTransactionActivity(transaction) {
+  return {
+    id: `transaction-${transaction._id.toString()}`,
+    type: "transaction",
+    title: transactionTitle(transaction.status),
+    description: `${transaction.creditAmount} kredit · total bayar ${transaction.totalAmount} · kode unik ${transaction.uniqueCode}`,
+    status: transaction.status,
+    amount: transaction.totalAmount,
+    creditAmount: transaction.creditAmount,
+    note: transaction.adminNote || "",
+    referenceId: transaction._id.toString(),
+    createdAt: transaction.updatedAt || transaction.createdAt
+  };
+}
+
+function toInvitationActivity(invitation) {
+  return {
+    id: `invitation-${invitation._id.toString()}`,
+    type: "invitation",
+    title: invitationTitle(invitation.status),
+    description: `${invitation.title || createInvitationLabel(invitation)} · /${invitation.slug}`,
+    status: invitation.status,
+    referenceId: invitation._id.toString(),
+    createdAt: invitation.updatedAt || invitation.createdAt
+  };
+}
+
+function toCreditLedgerActivity(ledger) {
+  return {
+    id: `credit-${ledger._id.toString()}`,
+    type: "credit",
+    title: creditLedgerTitle(ledger.type),
+    description: `${ledger.amount > 0 ? "+" : ""}${ledger.amount} kredit · saldo akhir ${ledger.balanceAfter}`,
+    status: ledger.type,
+    amount: ledger.amount,
+    balanceAfter: ledger.balanceAfter,
+    note: ledger.note || "",
+    referenceType: ledger.referenceType,
+    referenceId: ledger.referenceId?.toString?.() || null,
+    createdAt: ledger.createdAt
+  };
+}
+
+function transactionTitle(status) {
+  const titles = {
+    waiting_payment: "Transaksi dibuat",
+    waiting_verification: "Bukti pembayaran diunggah",
+    success: "Pembayaran diapprove",
+    rejected: "Pembayaran ditolak",
+    expired: "Transaksi expired"
+  };
+
+  return titles[status] || "Aktivitas transaksi";
+}
+
+function invitationTitle(status) {
+  const titles = {
+    draft: "Draft undangan dibuat/diperbarui",
+    active: "Undangan aktif",
+    locked: "Undangan terkunci",
+    expired: "Undangan expired"
+  };
+
+  return titles[status] || "Aktivitas undangan";
+}
+
+function creditLedgerTitle(type) {
+  const titles = {
+    purchase: "Kredit pembelian masuk",
+    publish: "Kredit dipakai publish",
+    manual_adjustment: "Adjustment kredit manual"
+  };
+
+  return titles[type] || "Aktivitas kredit";
+}
+
+function createInvitationLabel(invitation) {
+  const groomName = invitation.groom?.fullName || invitation.summary?.groomName || "";
+  const brideName = invitation.bride?.fullName || invitation.summary?.brideName || "";
+  const names = [groomName, brideName].filter(Boolean).join(" & ");
+
+  return names || "Undangan";
 }
