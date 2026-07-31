@@ -51,6 +51,7 @@ adminRoutes.get("/credit-packages", adminCreditPackages);
 adminRoutes.post("/credit-packages", adminCreateCreditPackage);
 adminRoutes.patch("/credit-packages/:id", adminUpdateCreditPackage);
 adminRoutes.patch("/credit-packages/:id/status", adminSetCreditPackageStatus);
+adminRoutes.post("/credit-packages/:id/delete", adminDeleteCreditPackage);
 adminRoutes.delete("/credit-packages/:id", adminDeleteCreditPackage);
 adminRoutes.get("/transactions", adminTransactions);
 adminRoutes.get("/transactions/:id", adminTransactionDetail);
