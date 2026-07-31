@@ -12,8 +12,7 @@ const creditPackageSchema = new Schema(
     creditAmount: {
       type: Number,
       required: true,
-      min: 1,
-      unique: true
+      min: 1
     },
     price: {
       type: Number,
@@ -24,10 +23,42 @@ const creditPackageSchema = new Schema(
       type: Boolean,
       default: true,
       index: true
+    },
+    promoCode: {
+      type: String,
+      default: "",
+      trim: true,
+      uppercase: true
+    },
+    startsAt: {
+      type: Date,
+      default: null,
+      index: true
+    },
+    endsAt: {
+      type: Date,
+      default: null,
+      index: true
+    },
+    deletedAt: {
+      type: Date,
+      default: null,
+      index: true
     }
   },
   {
     timestamps: true
+  }
+);
+
+creditPackageSchema.index(
+  { promoCode: 1 },
+  {
+    unique: true,
+    partialFilterExpression: {
+      promoCode: { $type: "string", $gt: "" },
+      deletedAt: null
+    }
   }
 );
 

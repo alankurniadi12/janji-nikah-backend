@@ -27,6 +27,7 @@ import {
 import {
   adminCreateCreditPackage,
   adminCreditPackages,
+  adminDeleteCreditPackage,
   adminSetCreditPackageStatus,
   adminUpdateCreditPackage
 } from "../controllers/creditPackageController.js";
@@ -50,6 +51,7 @@ adminRoutes.get("/credit-packages", adminCreditPackages);
 adminRoutes.post("/credit-packages", adminCreateCreditPackage);
 adminRoutes.patch("/credit-packages/:id", adminUpdateCreditPackage);
 adminRoutes.patch("/credit-packages/:id/status", adminSetCreditPackageStatus);
+adminRoutes.delete("/credit-packages/:id", adminDeleteCreditPackage);
 adminRoutes.get("/transactions", adminTransactions);
 adminRoutes.get("/transactions/:id", adminTransactionDetail);
 adminRoutes.post("/transactions/:id/approve", adminApproveTransaction);

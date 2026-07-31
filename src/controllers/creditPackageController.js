@@ -1,5 +1,6 @@
 import {
   createCreditPackage,
+  deleteCreditPackage,
   listActiveCreditPackages,
   listAdminCreditPackages,
   setCreditPackageStatus,
@@ -59,5 +60,14 @@ export const adminSetCreditPackageStatus = asyncHandler(async (req, res) => {
     data: {
       package: creditPackage
     }
+  });
+});
+
+export const adminDeleteCreditPackage = asyncHandler(async (req, res) => {
+  const result = await deleteCreditPackage(req.user, req.params.id);
+
+  res.json({
+    success: true,
+    data: result
   });
 });

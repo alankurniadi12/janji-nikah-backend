@@ -5,6 +5,7 @@ import Transaction from "../models/Transaction.js";
 import User from "../models/User.js";
 import { AppError } from "../utils/AppError.js";
 import { calculateTotalAmount, createUniquePaymentCode } from "../utils/money.js";
+import { buildActivePackageQuery, expireElapsedCreditPackages } from "./creditPackageService.js";
 
 const TRANSACTION_EXPIRY_MS = 24 * 60 * 60 * 1000;
 
@@ -67,7 +68,10 @@ export function toPublicAdminTransaction(transaction) {
           name: creditPackage.name,
           creditAmount: creditPackage.creditAmount,
           price: creditPackage.price,
-          isActive: creditPackage.isActive
+          isActive: creditPackage.isActive,
+          promoCode: creditPackage.promoCode || "",
+          startsAt: creditPackage.startsAt,
+          endsAt: creditPackage.endsAt
         }
       : null
   };
@@ -78,10 +82,15 @@ export async function createMemberTransaction(member, packageId) {
     throw new AppError(400, "Paket kredit wajib dipilih.");
   }
 
-  const creditPackage = await CreditPackage.findOne({ _id: packageId, isActive: true });
+  await expireElapsedCreditPackages();
+
+  const creditPackage = await CreditPackage.findOne({
+    _id: packageId,
+    ...buildActivePackageQuery(new Date())
+  });
 
   if (!creditPackage) {
-    throw new AppError(404, "Paket kredit tidak aktif atau tidak ditemukan.");
+    throw new AppError(404, "Paket kredit tidak aktif, belum mulai, sudah berakhir, atau tidak ditemukan.");
   }
 
   const uniqueCode = createUniquePaymentCode();
@@ -149,7 +158,7 @@ export async function listAdminTransactions({ status } = {}) {
   const transactions = await Transaction.find(query)
     .sort({ createdAt: -1 })
     .populate("memberId", "name email username status creditBalance")
-    .populate("packageId", "name creditAmount price isActive")
+    .populate("packageId", "name creditAmount price isActive promoCode startsAt endsAt")
     .lean();
   return transactions.map(toPublicAdminTransaction);
 }
@@ -159,7 +168,7 @@ export async function getAdminTransaction(transactionId) {
 
   const transaction = await Transaction.findById(transactionId)
     .populate("memberId", "name email username status creditBalance")
-    .populate("packageId", "name creditAmount price isActive")
+    .populate("packageId", "name creditAmount price isActive promoCode startsAt endsAt")
     .lean();
 
   if (!transaction) {
