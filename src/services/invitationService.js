@@ -1,3 +1,5 @@
+import crypto from "node:crypto";
+
 import Invitation from "../models/Invitation.js";
 import CreditLedger from "../models/CreditLedger.js";
 import Theme from "../models/Theme.js";
@@ -36,9 +38,23 @@ export function toPublicInvitation(invitation) {
   };
 }
 
+export function toMemberInvitation(invitation, member = null) {
+  const publicInvitation = toPublicInvitation(invitation);
+  const username = member?.username;
+  const token = invitation.hostAccessToken;
+
+  return {
+    ...publicInvitation,
+    hostViewUrl: username && token ? `/${username}/${invitation.slug}/host/${token}` : null
+  };
+}
+
 export async function listMemberInvitations(member) {
-  const invitations = await Invitation.find({ memberId: member._id }).sort({ updatedAt: -1 }).lean();
-  return invitations.map(toPublicInvitation);
+  const invitations = await Invitation.find({ memberId: member._id })
+    .select("+hostAccessToken")
+    .sort({ updatedAt: -1 })
+  await Promise.all(invitations.map(ensureHostAccessToken));
+  return invitations.map((invitation) => toMemberInvitation(invitation, member));
 }
 
 export async function createDraftInvitation(member, payload = {}) {
@@ -64,22 +80,24 @@ export async function createDraftInvitation(member, payload = {}) {
     envelope: normalizeEnvelope(payload.envelope)
   });
 
-  return toPublicInvitation(invitation);
+  return toMemberInvitation(invitation, member);
 }
 
 export async function getMemberInvitation(member, invitationId) {
   await lockInvitationIfNeeded(invitationId, member._id);
-  const invitation = await Invitation.findOne({ _id: invitationId, memberId: member._id }).lean();
+  const invitation = await Invitation.findOne({ _id: invitationId, memberId: member._id }).select("+hostAccessToken");
 
   if (!invitation) {
     throw new AppError(404, "Undangan tidak ditemukan.");
   }
 
-  return toPublicInvitation(invitation);
+  await ensureHostAccessToken(invitation);
+
+  return toMemberInvitation(invitation, member);
 }
 
 export async function updateMemberInvitation(member, invitationId, payload) {
-  const invitation = await Invitation.findOne({ _id: invitationId, memberId: member._id });
+  const invitation = await Invitation.findOne({ _id: invitationId, memberId: member._id }).select("+hostAccessToken");
 
   if (!invitation) {
     throw new AppError(404, "Undangan tidak ditemukan.");
@@ -111,7 +129,9 @@ export async function updateMemberInvitation(member, invitationId, payload) {
 
   await invitation.save();
 
-  return toPublicInvitation(invitation);
+  await ensureHostAccessToken(invitation);
+
+  return toMemberInvitation(invitation, member);
 }
 
 export async function deleteDraftInvitation(member, invitationId) {
@@ -129,20 +149,22 @@ export async function deleteDraftInvitation(member, invitationId) {
 }
 
 export async function previewMemberInvitation(member, invitationId) {
-  const invitation = await Invitation.findOne({ _id: invitationId, memberId: member._id }).lean();
+  const invitation = await Invitation.findOne({ _id: invitationId, memberId: member._id }).select("+hostAccessToken");
 
   if (!invitation) {
     throw new AppError(404, "Undangan tidak ditemukan.");
   }
 
+  await ensureHostAccessToken(invitation);
+
   return {
-    invitation: toPublicInvitation(invitation),
+    invitation: toMemberInvitation(invitation, member),
     previewUrl: `/${member.username}/${invitation.slug}?preview=true`
   };
 }
 
 export async function publishMemberInvitation(member, invitationId) {
-  const invitation = await Invitation.findOne({ _id: invitationId, memberId: member._id });
+  const invitation = await Invitation.findOne({ _id: invitationId, memberId: member._id }).select("+hostAccessToken");
 
   if (!invitation) {
     throw new AppError(404, "Undangan tidak ditemukan.");
@@ -207,7 +229,9 @@ export async function publishMemberInvitation(member, invitationId) {
     throw error;
   }
 
-  return toPublicInvitation(invitation);
+  await ensureHostAccessToken(invitation);
+
+  return toMemberInvitation(invitation, member);
 }
 
 export async function lockInvitationIfNeeded(invitationId, memberId = null) {
@@ -367,4 +391,19 @@ function addDays(date, days) {
   const result = new Date(date);
   result.setDate(result.getDate() + days);
   return result;
+}
+
+async function ensureHostAccessToken(invitation) {
+  const rawInvitation = await Invitation.collection.findOne(
+    { _id: invitation._id },
+    { projection: { hostAccessToken: 1 } }
+  );
+
+  if (rawInvitation?.hostAccessToken) {
+    invitation.hostAccessToken = rawInvitation.hostAccessToken;
+    return;
+  }
+
+  invitation.hostAccessToken = crypto.randomBytes(24).toString("hex");
+  await invitation.save();
 }

@@ -1,4 +1,5 @@
 import mongoose from "mongoose";
+import crypto from "node:crypto";
 
 const { Schema } = mongoose;
 
@@ -139,6 +140,12 @@ const invitationSchema = new Schema(
     summary: {
       type: Schema.Types.Mixed,
       default: {}
+    },
+    hostAccessToken: {
+      type: String,
+      default: () => crypto.randomBytes(24).toString("hex"),
+      select: false,
+      index: true
     }
   },
   {
