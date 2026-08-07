@@ -31,6 +31,12 @@ const defaultThemes = [
     key: "nusantara-heritage",
     thumbnailUrl: "",
     isPublicDemo: true
+  },
+  {
+    name: "Coastal Dawn",
+    key: "coastal-dawn",
+    thumbnailUrl: "",
+    isPublicDemo: true
   }
 ];
 
