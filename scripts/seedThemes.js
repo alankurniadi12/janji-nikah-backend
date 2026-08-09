@@ -37,6 +37,12 @@ const defaultThemes = [
     key: "coastal-dawn",
     thumbnailUrl: "",
     isPublicDemo: true
+  },
+  {
+    name: "Golden Bloom Stage",
+    key: "golden-bloom-stage",
+    thumbnailUrl: "",
+    isPublicDemo: true
   }
 ];
 
