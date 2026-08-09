@@ -10,6 +10,7 @@ import {
 import {
   addGalleryPhoto,
   deleteGalleryPhoto,
+  replaceCouplePhoto,
   replaceMainPhoto
 } from "../services/invitationPhotoService.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
@@ -89,6 +90,17 @@ export const memberPublishInvitation = asyncHandler(async (req, res) => {
 
 export const memberUploadMainPhoto = asyncHandler(async (req, res) => {
   const invitation = await replaceMainPhoto(req.user, req.params.id, req.file);
+
+  res.json({
+    success: true,
+    data: {
+      invitation
+    }
+  });
+});
+
+export const memberUploadCouplePhoto = asyncHandler(async (req, res) => {
+  const invitation = await replaceCouplePhoto(req.user, req.params.id, req.params.role, req.file);
 
   res.json({
     success: true,

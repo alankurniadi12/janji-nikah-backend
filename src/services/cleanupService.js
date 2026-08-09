@@ -43,7 +43,12 @@ export async function cleanupExpiredInvitations({ now = new Date(), limit = DEFA
 
 async function cleanupExpiredInvitation(invitation, now) {
   const invitationId = invitation._id;
-  const photoUrls = [invitation.mainPhotoUrl, ...(invitation.galleryPhotoUrls || [])].filter(Boolean);
+  const photoUrls = [
+    invitation.mainPhotoUrl,
+    invitation.groom?.photoUrl,
+    invitation.bride?.photoUrl,
+    ...(invitation.galleryPhotoUrls || [])
+  ].filter(Boolean);
   const summary = buildExpiredInvitationSummary(invitation);
   const [deletedGuests, deletedRsvps, deletedWishes] = await Promise.all([
     Guest.deleteMany({ invitationId }),
@@ -53,8 +58,8 @@ async function cleanupExpiredInvitation(invitation, now) {
 
   invitation.status = "expired";
   invitation.title = "";
-  invitation.groom = { fullName: "", parentsName: "" };
-  invitation.bride = { fullName: "", parentsName: "" };
+  invitation.groom = { fullName: "", parentsName: "", photoUrl: "" };
+  invitation.bride = { fullName: "", parentsName: "", photoUrl: "" };
   invitation.events = [];
   invitation.mainPhotoUrl = "";
   invitation.galleryPhotoUrls = [];

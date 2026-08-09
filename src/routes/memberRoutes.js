@@ -31,6 +31,7 @@ import {
   memberInvitations,
   memberPreviewInvitation,
   memberPublishInvitation,
+  memberUploadCouplePhoto,
   memberUploadGalleryPhoto,
   memberUploadMainPhoto,
   memberUpdateInvitation
@@ -80,6 +81,11 @@ memberRoutes.post(
   "/invitations/:id/photos/main",
   invitationPhotoUpload.single("photo"),
   memberUploadMainPhoto
+);
+memberRoutes.post(
+  "/invitations/:id/photos/couple/:role",
+  invitationPhotoUpload.single("photo"),
+  memberUploadCouplePhoto
 );
 memberRoutes.post(
   "/invitations/:id/photos/gallery",

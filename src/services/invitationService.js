@@ -13,14 +13,23 @@ const PUBLISH_CREDIT_COST = 1;
 const INVITATION_EXPIRE_AFTER_EVENT_DAYS = 5;
 
 export function toPublicInvitation(invitation) {
+  const groom = invitation.groom?.toObject?.() || invitation.groom || {};
+  const bride = invitation.bride?.toObject?.() || invitation.bride || {};
+
   return {
     id: invitation._id.toString(),
     memberId: invitation.memberId?.toString?.() || invitation.memberId,
     status: invitation.status,
     slug: invitation.slug,
     title: invitation.title || createInvitationTitle(invitation.groom?.fullName, invitation.bride?.fullName),
-    groom: invitation.groom,
-    bride: invitation.bride,
+    groom: {
+      ...groom,
+      photoUrl: toAbsoluteUploadUrl(groom.photoUrl)
+    },
+    bride: {
+      ...bride,
+      photoUrl: toAbsoluteUploadUrl(bride.photoUrl)
+    },
     events: invitation.events,
     mainPhotoUrl: toAbsoluteUploadUrl(invitation.mainPhotoUrl),
     galleryPhotoUrls: (invitation.galleryPhotoUrls || []).map(toAbsoluteUploadUrl),
@@ -312,14 +321,16 @@ function createInvitationTitle(groomName, brideName) {
 function normalizeCouple(couple = {}) {
   return {
     fullName: couple.fullName || "",
-    parentsName: couple.parentsName || ""
+    parentsName: couple.parentsName || "",
+    photoUrl: couple.photoUrl || ""
   };
 }
 
 function mergeCouple(current = {}, next = {}) {
   return {
     fullName: next.fullName !== undefined ? next.fullName : current.fullName || "",
-    parentsName: next.parentsName !== undefined ? next.parentsName : current.parentsName || ""
+    parentsName: next.parentsName !== undefined ? next.parentsName : current.parentsName || "",
+    photoUrl: current.photoUrl || ""
   };
 }
 

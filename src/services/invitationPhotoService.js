@@ -12,6 +12,10 @@ import { toRelativeUploadUrl, toUploadUrl } from "../utils/fileUrl.js";
 import { toPublicInvitation } from "./invitationService.js";
 
 const GALLERY_LIMIT = 5;
+const COUPLE_PHOTO_FIELDS = new Map([
+  ["groom", "groom"],
+  ["bride", "bride"]
+]);
 
 export async function replaceMainPhoto(member, invitationId, file) {
   assertUploadedFile(file);
@@ -28,6 +32,37 @@ export async function replaceMainPhoto(member, invitationId, file) {
   const oldPhotoUrl = invitation.mainPhotoUrl;
 
   invitation.mainPhotoUrl = publicUrl;
+  await invitation.save();
+  await deleteUploadByUrl(oldPhotoUrl);
+
+  return toPublicInvitation(invitation);
+}
+
+export async function replaceCouplePhoto(member, invitationId, role, file) {
+  assertUploadedFile(file);
+
+  const coupleField = COUPLE_PHOTO_FIELDS.get(role);
+
+  if (!coupleField) {
+    throw new AppError(400, "Jenis foto pengantin tidak valid.");
+  }
+
+  const invitation = await findEditableInvitation(member, invitationId);
+  const directory = resolveUploadPath(
+    "members",
+    member._id.toString(),
+    "invitations",
+    invitation._id.toString(),
+    "couple",
+    coupleField
+  );
+  const { publicUrl } = await processAndStoreImage(file, directory);
+  const oldPhotoUrl = invitation[coupleField]?.photoUrl;
+
+  invitation[coupleField] = {
+    ...(invitation[coupleField]?.toObject?.() || invitation[coupleField] || {}),
+    photoUrl: publicUrl
+  };
   await invitation.save();
   await deleteUploadByUrl(oldPhotoUrl);
 

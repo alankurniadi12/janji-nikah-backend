@@ -87,11 +87,13 @@ const invitationSchema = new Schema(
     },
     groom: {
       fullName: { type: String, default: "" },
-      parentsName: { type: String, default: "" }
+      parentsName: { type: String, default: "" },
+      photoUrl: { type: String, default: "" }
     },
     bride: {
       fullName: { type: String, default: "" },
-      parentsName: { type: String, default: "" }
+      parentsName: { type: String, default: "" },
+      photoUrl: { type: String, default: "" }
     },
     events: {
       type: [eventSchema],
