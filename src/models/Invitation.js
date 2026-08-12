@@ -60,6 +60,27 @@ const envelopeMethodSchema = new Schema(
   { _id: false }
 );
 
+const loveStoryItemSchema = new Schema(
+  {
+    title: {
+      type: String,
+      default: "",
+      trim: true
+    },
+    date: {
+      type: String,
+      default: "",
+      trim: true
+    },
+    description: {
+      type: String,
+      default: "",
+      trim: true
+    }
+  },
+  { _id: false }
+);
+
 const invitationSchema = new Schema(
   {
     memberId: {
@@ -106,6 +127,15 @@ const invitationSchema = new Schema(
     galleryPhotoUrls: {
       type: [String],
       default: []
+    },
+    loveStory: {
+      type: [loveStoryItemSchema],
+      default: []
+    },
+    dressCode: {
+      enabled: { type: Boolean, default: false },
+      note: { type: String, default: "", trim: true },
+      colors: { type: [String], default: [] }
     },
     themeId: {
       type: Schema.Types.ObjectId,

@@ -11,7 +11,7 @@ import { AppError } from "../utils/AppError.js";
 import { toRelativeUploadUrl, toUploadUrl } from "../utils/fileUrl.js";
 import { toPublicInvitation } from "./invitationService.js";
 
-const GALLERY_LIMIT = 5;
+const GALLERY_LIMIT = 10;
 const COUPLE_PHOTO_FIELDS = new Map([
   ["groom", "groom"],
   ["bride", "bride"]
@@ -75,7 +75,7 @@ export async function addGalleryPhoto(member, invitationId, file) {
   const invitation = await findEditableInvitation(member, invitationId);
 
   if (invitation.galleryPhotoUrls.length >= GALLERY_LIMIT) {
-    throw new AppError(409, "Maksimal 5 foto galeri.");
+    throw new AppError(409, `Maksimal ${GALLERY_LIMIT} foto galeri.`);
   }
 
   const directory = resolveUploadPath(

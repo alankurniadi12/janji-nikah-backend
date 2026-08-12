@@ -63,6 +63,12 @@ async function cleanupExpiredInvitation(invitation, now) {
   invitation.events = [];
   invitation.mainPhotoUrl = "";
   invitation.galleryPhotoUrls = [];
+  invitation.loveStory = [];
+  invitation.dressCode = {
+    enabled: false,
+    note: "",
+    colors: []
+  };
   invitation.musicId = null;
   invitation.envelope = {
     isEnabled: false,

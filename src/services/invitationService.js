@@ -11,6 +11,9 @@ import { createInvitationSlugBase, normalizeSlug } from "../utils/slug.js";
 const DRAFT_LIMIT = 3;
 const PUBLISH_CREDIT_COST = 1;
 const INVITATION_EXPIRE_AFTER_EVENT_DAYS = 5;
+const LOVE_STORY_LIMIT = 5;
+const DRESS_CODE_COLOR_LIMIT = 5;
+const HEX_COLOR_PATTERN = /^#[0-9a-f]{6}$/i;
 
 export function toPublicInvitation(invitation) {
   const groom = invitation.groom?.toObject?.() || invitation.groom || {};
@@ -33,6 +36,8 @@ export function toPublicInvitation(invitation) {
     events: invitation.events,
     mainPhotoUrl: toAbsoluteUploadUrl(invitation.mainPhotoUrl),
     galleryPhotoUrls: (invitation.galleryPhotoUrls || []).map(toAbsoluteUploadUrl),
+    loveStory: invitation.loveStory || [],
+    dressCode: invitation.dressCode || { enabled: false, note: "", colors: [] },
     themeId: invitation.themeId?.toString?.() || null,
     musicId: invitation.musicId?.toString?.() || null,
     envelope: invitation.envelope,
@@ -86,6 +91,8 @@ export async function createDraftInvitation(member, payload = {}) {
     groom: normalizeCouple(payload.groom),
     bride: normalizeCouple(payload.bride),
     events: normalizeEvents(payload.events),
+    loveStory: normalizeLoveStory(payload.loveStory),
+    dressCode: normalizeDressCode(payload.dressCode),
     envelope: normalizeEnvelope(payload.envelope)
   });
 
@@ -120,6 +127,8 @@ export async function updateMemberInvitation(member, invitationId, payload) {
     invitation.title = createInvitationTitle(invitation.groom.fullName, invitation.bride.fullName);
   }
   if (payload.events !== undefined) invitation.events = normalizeEvents(payload.events);
+  if (payload.loveStory !== undefined) invitation.loveStory = normalizeLoveStory(payload.loveStory);
+  if (payload.dressCode !== undefined) invitation.dressCode = normalizeDressCode(payload.dressCode);
   if (payload.themeId !== undefined) invitation.themeId = payload.themeId || null;
   if (payload.musicId !== undefined) invitation.musicId = payload.musicId || null;
   if (payload.envelope !== undefined) {
@@ -349,6 +358,66 @@ function normalizeEvents(events = []) {
   }));
 }
 
+function normalizeLoveStory(loveStory = []) {
+  if (!Array.isArray(loveStory)) {
+    throw new AppError(400, "Cerita cinta harus berupa array.");
+  }
+
+  const items = loveStory
+    .map((item) => ({
+      title: cleanText(item?.title),
+      date: cleanText(item?.date),
+      description: cleanText(item?.description)
+    }))
+    .filter((item) => item.title || item.date || item.description);
+
+  if (items.length > LOVE_STORY_LIMIT) {
+    throw new AppError(400, `Cerita cinta maksimal ${LOVE_STORY_LIMIT} bagian.`);
+  }
+
+  items.forEach((item, index) => {
+    if (!item.title || !item.description) {
+      throw new AppError(400, `Lengkapi judul dan cerita cinta bagian ${index + 1}.`);
+    }
+  });
+
+  return items;
+}
+
+function normalizeDressCode(dressCode = {}) {
+  const enabled = Boolean(dressCode.enabled);
+  const colors = Array.isArray(dressCode.colors)
+    ? dressCode.colors.map((color) => cleanText(color).toLowerCase()).filter(Boolean)
+    : [];
+
+  if (!enabled) {
+    return {
+      enabled: false,
+      note: cleanText(dressCode.note),
+      colors: []
+    };
+  }
+
+  if (colors.length === 0) {
+    throw new AppError(400, "Minimal isi satu warna dress code jika fitur diaktifkan.");
+  }
+
+  if (colors.length > DRESS_CODE_COLOR_LIMIT) {
+    throw new AppError(400, `Dress code maksimal ${DRESS_CODE_COLOR_LIMIT} warna.`);
+  }
+
+  const invalidColor = colors.find((color) => !HEX_COLOR_PATTERN.test(color));
+  if (invalidColor) {
+    throw new AppError(400, "Warna dress code harus menggunakan format hex, contoh #f5d7c4.");
+  }
+
+  return {
+    enabled,
+    note: cleanText(dressCode.note),
+    colors
+  };
+}
+
 function normalizeEnvelope(envelope = {}) {
   const methods = Array.isArray(envelope.methods) ? envelope.methods : [];
 
@@ -365,6 +434,10 @@ function normalizeEnvelope(envelope = {}) {
       accountHolder: method.accountHolder
     }))
   };
+}
+
+function cleanText(value) {
+  return typeof value === "string" ? value.trim() : "";
 }
 
 function validateInvitationReadyToPublish(invitation) {
