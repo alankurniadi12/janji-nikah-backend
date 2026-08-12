@@ -69,6 +69,39 @@ export async function replaceCouplePhoto(member, invitationId, role, file) {
   return toPublicInvitation(invitation);
 }
 
+export async function replaceLoveStoryPhoto(member, invitationId, storyIndex, file) {
+  assertUploadedFile(file);
+
+  const index = Number.parseInt(storyIndex, 10);
+
+  if (!Number.isInteger(index) || index < 0) {
+    throw new AppError(400, "Index cerita cinta tidak valid.");
+  }
+
+  const invitation = await findEditableInvitation(member, invitationId);
+
+  if (!invitation.loveStory?.[index]) {
+    throw new AppError(404, "Cerita cinta tidak ditemukan.");
+  }
+
+  const directory = resolveUploadPath(
+    "members",
+    member._id.toString(),
+    "invitations",
+    invitation._id.toString(),
+    "love-story",
+    index.toString()
+  );
+  const { publicUrl } = await processAndStoreImage(file, directory);
+  const oldPhotoUrl = invitation.loveStory[index].photoUrl;
+
+  invitation.loveStory[index].photoUrl = publicUrl;
+  await invitation.save();
+  await deleteUploadByUrl(oldPhotoUrl);
+
+  return toPublicInvitation(invitation);
+}
+
 export async function addGalleryPhoto(member, invitationId, file) {
   assertUploadedFile(file);
 

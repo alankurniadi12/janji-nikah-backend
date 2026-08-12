@@ -11,6 +11,7 @@ import {
   addGalleryPhoto,
   deleteGalleryPhoto,
   replaceCouplePhoto,
+  replaceLoveStoryPhoto,
   replaceMainPhoto
 } from "../services/invitationPhotoService.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
@@ -112,6 +113,17 @@ export const memberUploadCouplePhoto = asyncHandler(async (req, res) => {
 
 export const memberUploadGalleryPhoto = asyncHandler(async (req, res) => {
   const invitation = await addGalleryPhoto(req.user, req.params.id, req.file);
+
+  res.json({
+    success: true,
+    data: {
+      invitation
+    }
+  });
+});
+
+export const memberUploadLoveStoryPhoto = asyncHandler(async (req, res) => {
+  const invitation = await replaceLoveStoryPhoto(req.user, req.params.id, req.params.storyIndex, req.file);
 
   res.json({
     success: true,

@@ -76,6 +76,11 @@ const loveStoryItemSchema = new Schema(
       type: String,
       default: "",
       trim: true
+    },
+    photoUrl: {
+      type: String,
+      default: "",
+      trim: true
     }
   },
   { _id: false }

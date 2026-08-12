@@ -47,6 +47,7 @@ async function cleanupExpiredInvitation(invitation, now) {
     invitation.mainPhotoUrl,
     invitation.groom?.photoUrl,
     invitation.bride?.photoUrl,
+    ...(invitation.loveStory || []).map((item) => item.photoUrl),
     ...(invitation.galleryPhotoUrls || [])
   ].filter(Boolean);
   const summary = buildExpiredInvitationSummary(invitation);

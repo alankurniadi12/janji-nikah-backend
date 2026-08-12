@@ -5,7 +5,7 @@ import CreditLedger from "../models/CreditLedger.js";
 import Theme from "../models/Theme.js";
 import User from "../models/User.js";
 import { AppError } from "../utils/AppError.js";
-import { toAbsoluteUploadUrl } from "../utils/fileUrl.js";
+import { toAbsoluteUploadUrl, toRelativeUploadUrl } from "../utils/fileUrl.js";
 import { createInvitationSlugBase, normalizeSlug } from "../utils/slug.js";
 
 const DRAFT_LIMIT = 3;
@@ -36,7 +36,7 @@ export function toPublicInvitation(invitation) {
     events: invitation.events,
     mainPhotoUrl: toAbsoluteUploadUrl(invitation.mainPhotoUrl),
     galleryPhotoUrls: (invitation.galleryPhotoUrls || []).map(toAbsoluteUploadUrl),
-    loveStory: invitation.loveStory || [],
+    loveStory: normalizePublicLoveStory(invitation.loveStory),
     dressCode: invitation.dressCode || { enabled: false, note: "", colors: [] },
     themeId: invitation.themeId?.toString?.() || null,
     musicId: invitation.musicId?.toString?.() || null,
@@ -367,7 +367,8 @@ function normalizeLoveStory(loveStory = []) {
     .map((item) => ({
       title: cleanText(item?.title),
       date: cleanText(item?.date),
-      description: cleanText(item?.description)
+      description: cleanText(item?.description),
+      photoUrl: toRelativeUploadUrl(cleanText(item?.photoUrl))
     }))
     .filter((item) => item.title || item.date || item.description);
 
@@ -382,6 +383,15 @@ function normalizeLoveStory(loveStory = []) {
   });
 
   return items;
+}
+
+function normalizePublicLoveStory(loveStory = []) {
+  return (loveStory || []).map((item) => ({
+    title: item.title || "",
+    date: item.date || "",
+    description: item.description || "",
+    photoUrl: toAbsoluteUploadUrl(item.photoUrl)
+  }));
 }
 
 function normalizeDressCode(dressCode = {}) {

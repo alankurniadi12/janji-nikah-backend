@@ -33,6 +33,7 @@ import {
   memberPublishInvitation,
   memberUploadCouplePhoto,
   memberUploadGalleryPhoto,
+  memberUploadLoveStoryPhoto,
   memberUploadMainPhoto,
   memberUpdateInvitation
 } from "../controllers/invitationController.js";
@@ -91,6 +92,11 @@ memberRoutes.post(
   "/invitations/:id/photos/gallery",
   invitationPhotoUpload.single("photo"),
   memberUploadGalleryPhoto
+);
+memberRoutes.post(
+  "/invitations/:id/photos/love-story/:storyIndex",
+  invitationPhotoUpload.single("photo"),
+  memberUploadLoveStoryPhoto
 );
 memberRoutes.delete("/invitations/:id/photos/gallery/:photoId", memberDeleteGalleryPhoto);
 memberRoutes.get("/invitations/:id/wishes", memberWishes);
