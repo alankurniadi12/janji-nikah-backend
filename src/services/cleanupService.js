@@ -70,6 +70,11 @@ async function cleanupExpiredInvitation(invitation, now) {
     note: "",
     colors: []
   };
+  invitation.quote = {
+    enabled: false,
+    text: "",
+    source: ""
+  };
   invitation.musicId = null;
   invitation.envelope = {
     isEnabled: false,

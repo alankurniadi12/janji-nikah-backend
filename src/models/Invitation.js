@@ -86,6 +86,26 @@ const loveStoryItemSchema = new Schema(
   { _id: false }
 );
 
+const quoteSchema = new Schema(
+  {
+    enabled: {
+      type: Boolean,
+      default: false
+    },
+    text: {
+      type: String,
+      default: "",
+      trim: true
+    },
+    source: {
+      type: String,
+      default: "",
+      trim: true
+    }
+  },
+  { _id: false }
+);
+
 const invitationSchema = new Schema(
   {
     memberId: {
@@ -141,6 +161,10 @@ const invitationSchema = new Schema(
       enabled: { type: Boolean, default: false },
       note: { type: String, default: "", trim: true },
       colors: { type: [String], default: [] }
+    },
+    quote: {
+      type: quoteSchema,
+      default: () => ({})
     },
     themeId: {
       type: Schema.Types.ObjectId,

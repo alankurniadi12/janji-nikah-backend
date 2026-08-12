@@ -13,7 +13,12 @@ const PUBLISH_CREDIT_COST = 1;
 const INVITATION_EXPIRE_AFTER_EVENT_DAYS = 5;
 const LOVE_STORY_LIMIT = 5;
 const DRESS_CODE_COLOR_LIMIT = 5;
+const QUOTE_TEXT_LIMIT = 500;
+const QUOTE_SOURCE_LIMIT = 80;
 const HEX_COLOR_PATTERN = /^#[0-9a-f]{6}$/i;
+const DEFAULT_QUOTE_TEXT =
+  "Dan di antara tanda-tanda kekuasaan-Nya ialah Dia menciptakan untukmu pasangan-pasangan dari jenismu sendiri, supaya kamu cenderung dan merasa tenteram kepadanya, dan Dia menjadikan di antaramu rasa kasih dan sayang.";
+const DEFAULT_QUOTE_SOURCE = "QS. Ar-Rum: 21";
 
 export function toPublicInvitation(invitation) {
   const groom = invitation.groom?.toObject?.() || invitation.groom || {};
@@ -38,6 +43,7 @@ export function toPublicInvitation(invitation) {
     galleryPhotoUrls: (invitation.galleryPhotoUrls || []).map(toAbsoluteUploadUrl),
     loveStory: normalizePublicLoveStory(invitation.loveStory),
     dressCode: invitation.dressCode || { enabled: false, note: "", colors: [] },
+    quote: normalizePublicQuote(invitation.quote),
     themeId: invitation.themeId?.toString?.() || null,
     musicId: invitation.musicId?.toString?.() || null,
     envelope: invitation.envelope,
@@ -93,6 +99,7 @@ export async function createDraftInvitation(member, payload = {}) {
     events: normalizeEvents(payload.events),
     loveStory: normalizeLoveStory(payload.loveStory),
     dressCode: normalizeDressCode(payload.dressCode),
+    quote: normalizeQuote(payload.quote),
     envelope: normalizeEnvelope(payload.envelope)
   });
 
@@ -129,6 +136,7 @@ export async function updateMemberInvitation(member, invitationId, payload) {
   if (payload.events !== undefined) invitation.events = normalizeEvents(payload.events);
   if (payload.loveStory !== undefined) invitation.loveStory = normalizeLoveStory(payload.loveStory);
   if (payload.dressCode !== undefined) invitation.dressCode = normalizeDressCode(payload.dressCode);
+  if (payload.quote !== undefined) invitation.quote = normalizeQuote(payload.quote);
   if (payload.themeId !== undefined) invitation.themeId = payload.themeId || null;
   if (payload.musicId !== undefined) invitation.musicId = payload.musicId || null;
   if (payload.envelope !== undefined) {
@@ -425,6 +433,46 @@ function normalizeDressCode(dressCode = {}) {
     enabled,
     note: cleanText(dressCode.note),
     colors
+  };
+}
+
+function normalizeQuote(quote = {}) {
+  const enabled = Boolean(quote.enabled);
+  const text = cleanText(quote.text);
+  const source = cleanText(quote.source);
+
+  if (!enabled) {
+    return {
+      enabled: false,
+      text,
+      source
+    };
+  }
+
+  if (text.length > QUOTE_TEXT_LIMIT) {
+    throw new AppError(400, `Quote maksimal ${QUOTE_TEXT_LIMIT} karakter.`);
+  }
+
+  if (source.length > QUOTE_SOURCE_LIMIT) {
+    throw new AppError(400, `Sumber quote maksimal ${QUOTE_SOURCE_LIMIT} karakter.`);
+  }
+
+  return {
+    enabled,
+    text: text || DEFAULT_QUOTE_TEXT,
+    source: source || DEFAULT_QUOTE_SOURCE
+  };
+}
+
+function normalizePublicQuote(quote = {}) {
+  const enabled = Boolean(quote.enabled);
+  const text = cleanText(quote.text);
+  const source = cleanText(quote.source);
+
+  return {
+    enabled,
+    text: enabled ? text || DEFAULT_QUOTE_TEXT : text,
+    source: enabled ? source || DEFAULT_QUOTE_SOURCE : source
   };
 }
 
