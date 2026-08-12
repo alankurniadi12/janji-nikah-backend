@@ -1,7 +1,28 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { toPublicWish } from "../src/services/guestService.js";
+import { toPublicGuest, toPublicWish } from "../src/services/guestService.js";
+
+test("formats guest personal link without requiring token exposure", () => {
+  const guest = toPublicGuest(
+    {
+      _id: { toString: () => "guest-id" },
+      invitationId: { toString: () => "invitation-id" },
+      name: "Bapak Andi",
+      token: "guest-token",
+      sentStatus: "not_sent",
+      sentAt: null,
+      openedAt: null,
+      createdAt: null,
+      updatedAt: null
+    },
+    { slug: "raka-amara" },
+    { username: "member-name" }
+  );
+
+  assert.equal(guest.link, "/member-name/raka-amara/guest/guest-token");
+  assert.equal(guest.token, "guest-token");
+});
 
 test("formats wishes with RSVP status for API responses", () => {
   const createdAt = new Date("2026-07-28T08:00:00.000Z");

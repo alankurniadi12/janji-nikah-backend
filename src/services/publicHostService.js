@@ -62,9 +62,8 @@ export async function getPublicHostDashboard(username, slug, token) {
   const rsvpByGuestId = new Map(rsvps.map((rsvp) => [rsvp.guestId.toString(), rsvp]));
   const guestsWithRsvp = guests.map((guest) => {
     const rsvp = rsvpByGuestId.get(guest._id.toString());
-    const publicGuest = toPublicGuest(guest);
+    const publicGuest = toPublicGuest(guest, invitation, member);
     delete publicGuest.token;
-    delete publicGuest.link;
 
     return {
       ...publicGuest,
