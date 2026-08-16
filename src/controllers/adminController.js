@@ -46,8 +46,8 @@ export const adminAdjustMemberCredits = asyncHandler(async (req, res) => {
 });
 
 export const adminInvitations = asyncHandler(async (req, res) => {
-  const invitations = await listAdminInvitations(req.query);
-  res.json({ success: true, data: { invitations } });
+  const data = await listAdminInvitations(req.query);
+  res.json({ success: true, data });
 });
 
 export const adminInvitationDetail = asyncHandler(async (req, res) => {

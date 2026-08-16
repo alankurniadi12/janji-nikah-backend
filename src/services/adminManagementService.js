@@ -141,7 +141,10 @@ export async function listAdminInvitations({ status, memberStatus, q } = {}) {
     const statusMemberIds = statusMembers.map((member) => member._id);
 
     if (!statusMemberIds.length) {
-      return [];
+      return {
+        invitations: [],
+        summary: await getInvitationSummary()
+      };
     }
 
     query.memberId = { $in: statusMemberIds };
@@ -172,17 +175,65 @@ export async function listAdminInvitations({ status, memberStatus, q } = {}) {
     }
   }
 
-  const invitations = await Invitation.find(query).sort({ createdAt: -1 }).limit(100).lean();
+  const [invitations, summary] = await Promise.all([
+    Invitation.find(query).sort({ createdAt: -1 }).limit(100).lean(),
+    getInvitationSummary()
+  ]);
   const memberIds = [...new Set(invitations.map((invitation) => invitation.memberId?.toString()).filter(Boolean))];
   const members = await User.find({ _id: { $in: memberIds } })
     .select("name email username status creditBalance")
     .lean();
   const memberMap = new Map(members.map((member) => [member._id.toString(), toMemberSummary(member)]));
 
-  return invitations.map((invitation) => ({
-    ...toPublicInvitation(invitation),
-    member: memberMap.get(invitation.memberId?.toString()) || null
-  }));
+  return {
+    invitations: invitations.map((invitation) => ({
+      ...toPublicInvitation(invitation),
+      member: memberMap.get(invitation.memberId?.toString()) || null
+    })),
+    summary
+  };
+}
+
+async function getInvitationSummary() {
+  const now = new Date();
+  const monthStart = startOfMonth(now);
+  const next7DaysEnd = addDays(now, 7);
+
+  const [
+    total,
+    draft,
+    active,
+    locked,
+    expired,
+    publishedTotal,
+    publishedThisMonth,
+    expiringSoon
+  ] = await Promise.all([
+    Invitation.countDocuments(),
+    Invitation.countDocuments({ status: "draft" }),
+    Invitation.countDocuments({ status: "active" }),
+    Invitation.countDocuments({ status: "locked" }),
+    Invitation.countDocuments({ status: "expired" }),
+    Invitation.countDocuments({ publishedAt: { $ne: null } }),
+    Invitation.countDocuments({ publishedAt: { $gte: monthStart } }),
+    Invitation.countDocuments({
+      status: { $in: ["active", "locked"] },
+      expiresAt: { $gte: now, $lte: next7DaysEnd }
+    })
+  ]);
+
+  return {
+    total,
+    draft,
+    active,
+    locked,
+    live: active + locked,
+    inactive: expired,
+    expired,
+    publishedTotal,
+    publishedThisMonth,
+    expiringSoon
+  };
 }
 
 function buildSearchRegex(value) {
@@ -513,4 +564,14 @@ function createInvitationLabel(invitation) {
   const names = [groomName, brideName].filter(Boolean).join(" & ");
 
   return names || "Undangan";
+}
+
+function startOfMonth(date) {
+  return new Date(date.getFullYear(), date.getMonth(), 1);
+}
+
+function addDays(date, days) {
+  const nextDate = new Date(date);
+  nextDate.setDate(nextDate.getDate() + days);
+  return nextDate;
 }
