@@ -72,7 +72,7 @@ export function toMemberInvitation(invitation, member = null) {
 export async function listMemberInvitations(member) {
   const invitations = await Invitation.find({ memberId: member._id })
     .select("+hostAccessToken")
-    .sort({ updatedAt: -1 })
+    .sort({ createdAt: -1, _id: -1 });
   await Promise.all(invitations.map(ensureHostAccessToken));
   return invitations.map((invitation) => toMemberInvitation(invitation, member));
 }
