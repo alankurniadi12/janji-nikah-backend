@@ -117,6 +117,8 @@ export async function getAdminDashboard() {
     successfulTransactions,
     monthlyRevenue,
     last30DaysRevenue,
+    memberServiceRevenue,
+    monthlyMemberServiceRevenue,
     monthlyCreditsSold,
     monthlyCreditsUsed,
     activeInvitations,
@@ -143,6 +145,8 @@ export async function getAdminDashboard() {
     Transaction.countDocuments({ status: "success" }),
     sumSuccessfulRevenue({ approvedAt: { $gte: monthStart } }),
     sumSuccessfulRevenue({ approvedAt: { $gte: last30DaysStart } }),
+    sumInvitationServiceRevenue(),
+    sumInvitationServiceRevenue({ publishedAt: { $gte: monthStart } }),
     sumCreditsSold({ approvedAt: { $gte: monthStart } }),
     sumCreditsUsed({ createdAt: { $gte: monthStart } }),
     Invitation.countDocuments({ status: { $in: ["active", "locked"] } }),
@@ -185,7 +189,10 @@ export async function getAdminDashboard() {
     },
     revenue: {
       thisMonth: monthlyRevenue,
-      last30Days: last30DaysRevenue
+      last30Days: last30DaysRevenue,
+      memberServiceTotal: memberServiceRevenue.total,
+      memberServiceThisMonth: monthlyMemberServiceRevenue.total,
+      memberServicePricedInvitations: memberServiceRevenue.count
     },
     credits: {
       soldThisMonth: monthlyCreditsSold,
@@ -260,6 +267,30 @@ async function getMemberServiceRevenue(memberId) {
     total: summary.total || 0,
     count: summary.count || 0,
     average: Math.round(summary.average || 0)
+  };
+}
+
+async function sumInvitationServiceRevenue(dateFilter = {}) {
+  const [summary = {}] = await Invitation.aggregate([
+    {
+      $match: {
+        publishedAt: { $ne: null },
+        servicePrice: { $gt: 0 },
+        ...dateFilter
+      }
+    },
+    {
+      $group: {
+        _id: null,
+        total: { $sum: "$servicePrice" },
+        count: { $sum: 1 }
+      }
+    }
+  ]);
+
+  return {
+    total: summary.total || 0,
+    count: summary.count || 0
   };
 }
 

@@ -26,7 +26,12 @@ export async function listMembers({ status, q } = {}) {
   }
 
   const members = await User.find(query).sort({ createdAt: -1 }).limit(100).lean();
-  return members.map(toPublicUser);
+  const revenueMap = await getMembersServiceRevenueMap(members.map((member) => member._id));
+
+  return members.map((member) => ({
+    ...toPublicUser(member),
+    revenue: revenueMap.get(member._id.toString()) || emptyServiceRevenue()
+  }));
 }
 
 export async function getMemberDetail(memberId) {
@@ -36,10 +41,14 @@ export async function getMemberDetail(memberId) {
     throw new AppError(404, "Member tidak ditemukan.");
   }
 
-  const activity = await getMemberActivity(member._id);
+  const [activity, revenue] = await Promise.all([
+    getMemberActivity(member._id),
+    getMemberServiceRevenue(member._id)
+  ]);
 
   return {
     ...toPublicUser(member),
+    revenue,
     activity
   };
 }
@@ -207,7 +216,8 @@ async function getInvitationSummary() {
     expired,
     publishedTotal,
     publishedThisMonth,
-    expiringSoon
+    expiringSoon,
+    serviceRevenue
   ] = await Promise.all([
     Invitation.countDocuments(),
     Invitation.countDocuments({ status: "draft" }),
@@ -219,7 +229,8 @@ async function getInvitationSummary() {
     Invitation.countDocuments({
       status: { $in: ["active", "locked"] },
       expiresAt: { $gte: now, $lte: next7DaysEnd }
-    })
+    }),
+    getInvitationServiceRevenue()
   ]);
 
   return {
@@ -232,7 +243,33 @@ async function getInvitationSummary() {
     expired,
     publishedTotal,
     publishedThisMonth,
-    expiringSoon
+    expiringSoon,
+    serviceRevenue
+  };
+}
+
+async function getInvitationServiceRevenue() {
+  const [summary = {}] = await Invitation.aggregate([
+    {
+      $match: {
+        publishedAt: { $ne: null },
+        servicePrice: { $gt: 0 }
+      }
+    },
+    {
+      $group: {
+        _id: null,
+        serviceTotal: { $sum: "$servicePrice" },
+        pricedInvitations: { $sum: 1 },
+        averageServicePrice: { $avg: "$servicePrice" }
+      }
+    }
+  ]);
+
+  return {
+    serviceTotal: summary.serviceTotal || 0,
+    pricedInvitations: summary.pricedInvitations || 0,
+    averageServicePrice: Math.round(summary.averageServicePrice || 0)
   };
 }
 
@@ -320,7 +357,7 @@ async function getMemberActivity(memberId) {
     Invitation.find({ memberId })
       .sort({ updatedAt: -1 })
       .limit(8)
-      .select("status slug title groom bride publishedAt lockedAt expiresAt expiredAt createdAt updatedAt")
+      .select("status slug title servicePrice groom bride publishedAt lockedAt expiresAt expiredAt createdAt updatedAt")
       .lean(),
     CreditLedger.find({ memberId })
       .sort({ createdAt: -1 })
@@ -341,6 +378,54 @@ async function getMemberActivity(memberId) {
       invitations: invitations.length,
       creditEvents: creditLedgers.length
     }
+  };
+}
+
+async function getMembersServiceRevenueMap(memberIds = []) {
+  if (!memberIds.length) {
+    return new Map();
+  }
+
+  const rows = await Invitation.aggregate([
+    {
+      $match: {
+        memberId: { $in: memberIds },
+        publishedAt: { $ne: null },
+        servicePrice: { $gt: 0 }
+      }
+    },
+    {
+      $group: {
+        _id: "$memberId",
+        serviceTotal: { $sum: "$servicePrice" },
+        pricedInvitations: { $sum: 1 },
+        averageServicePrice: { $avg: "$servicePrice" }
+      }
+    }
+  ]);
+
+  return new Map(
+    rows.map((row) => [
+      row._id.toString(),
+      {
+        serviceTotal: row.serviceTotal || 0,
+        pricedInvitations: row.pricedInvitations || 0,
+        averageServicePrice: Math.round(row.averageServicePrice || 0)
+      }
+    ])
+  );
+}
+
+async function getMemberServiceRevenue(memberId) {
+  const revenueMap = await getMembersServiceRevenueMap([memberId]);
+  return revenueMap.get(memberId.toString()) || emptyServiceRevenue();
+}
+
+function emptyServiceRevenue() {
+  return {
+    serviceTotal: 0,
+    pricedInvitations: 0,
+    averageServicePrice: 0
   };
 }
 
@@ -498,12 +583,15 @@ function toTransactionActivity(transaction) {
 }
 
 function toInvitationActivity(invitation) {
+  const servicePrice = invitation.servicePrice || 0;
+
   return {
     id: `invitation-${invitation._id.toString()}`,
     type: "invitation",
     title: invitationTitle(invitation.status),
-    description: `${invitation.title || createInvitationLabel(invitation)} · /${invitation.slug}`,
+    description: `${invitation.title || createInvitationLabel(invitation)} · /${invitation.slug}${servicePrice ? ` · nilai jasa ${servicePrice}` : ""}`,
     status: invitation.status,
+    servicePrice,
     referenceId: invitation._id.toString(),
     createdAt: invitation.updatedAt || invitation.createdAt
   };
