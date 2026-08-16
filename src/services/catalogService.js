@@ -2,6 +2,7 @@ import AuditLog from "../models/AuditLog.js";
 import Music from "../models/Music.js";
 import Theme from "../models/Theme.js";
 import { AppError } from "../utils/AppError.js";
+import { toUploadUrl } from "../utils/fileUrl.js";
 
 export function toPublicTheme(theme) {
   return {
@@ -84,8 +85,22 @@ export async function listAdminMusic() {
 
 export async function createMusic(admin, payload) {
   validateMusicPayload(payload, true);
-  const music = await Music.create(payload);
+  const music = await Music.create(normalizeMusicPayload(payload));
   await logCatalogAction(admin, "music.created", "Music", music._id, null, music.toObject());
+  return toPublicMusic(music);
+}
+
+export async function createUploadedMusic(admin, payload, file) {
+  if (!file) throw new AppError(400, "File MP3 wajib diupload.");
+
+  const data = normalizeMusicPayload({
+    ...payload,
+    fileUrl: toUploadUrl(file.path)
+  });
+  validateMusicPayload(data, true);
+
+  const music = await Music.create(data);
+  await logCatalogAction(admin, "music.uploaded", "Music", music._id, null, music.toObject());
   return toPublicMusic(music);
 }
 
@@ -94,7 +109,7 @@ export async function updateMusic(admin, musicId, payload) {
   if (!music) throw new AppError(404, "Musik tidak ditemukan.");
   validateMusicPayload(payload, false);
   const before = music.toObject();
-  Object.assign(music, pick(payload, ["title", "category", "duration", "fileUrl"]));
+  Object.assign(music, pick(normalizeMusicPayload(payload), ["title", "category", "duration", "fileUrl"]));
   await music.save();
   await logCatalogAction(admin, "music.updated", "Music", music._id, before, music.toObject());
   return toPublicMusic(music);
@@ -118,6 +133,17 @@ function validateThemePayload(payload, requireAll) {
 function validateMusicPayload(payload, requireAll) {
   if (requireAll && !payload?.title) throw new AppError(400, "Judul musik wajib diisi.");
   if (requireAll && !payload?.fileUrl) throw new AppError(400, "File URL musik wajib diisi.");
+}
+
+function normalizeMusicPayload(payload = {}) {
+  const duration = Number(payload.duration);
+
+  return {
+    ...payload,
+    title: payload.title?.trim?.() || payload.title,
+    category: payload.category?.trim?.() || "",
+    duration: Number.isFinite(duration) && duration >= 0 ? duration : 0
+  };
 }
 
 function pick(source, keys) {

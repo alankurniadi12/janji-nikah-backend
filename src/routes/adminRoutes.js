@@ -22,6 +22,7 @@ import {
   adminSetThemeStatus,
   adminThemes,
   adminUpdateMusic,
+  adminUploadMusic,
   adminUpdateTheme
 } from "../controllers/catalogController.js";
 import {
@@ -38,8 +39,10 @@ import {
   adminTransactions
 } from "../controllers/transactionController.js";
 import { authenticate, requireRole } from "../middlewares/authMiddleware.js";
+import { createAudioUpload, resolveUploadPath } from "../middlewares/upload.js";
 
 export const adminRoutes = Router();
+const musicUpload = createAudioUpload(() => resolveUploadPath("music"));
 
 adminRoutes.use(authenticate, requireRole("admin"));
 adminRoutes.get("/dashboard", adminDashboard);
@@ -63,6 +66,7 @@ adminRoutes.patch("/themes/:id", adminUpdateTheme);
 adminRoutes.patch("/themes/:id/status", adminSetThemeStatus);
 adminRoutes.get("/music", adminMusic);
 adminRoutes.post("/music", adminCreateMusic);
+adminRoutes.post("/music/upload", musicUpload.single("file"), adminUploadMusic);
 adminRoutes.patch("/music/:id", adminUpdateMusic);
 adminRoutes.patch("/music/:id/status", adminSetMusicStatus);
 adminRoutes.get("/invitations", adminInvitations);

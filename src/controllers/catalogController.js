@@ -1,5 +1,6 @@
 import {
   createMusic,
+  createUploadedMusic,
   createTheme,
   listActiveMusic,
   listActiveThemes,
@@ -55,6 +56,11 @@ export const adminMusic = asyncHandler(async (req, res) => {
 
 export const adminCreateMusic = asyncHandler(async (req, res) => {
   const music = await createMusic(req.user, req.body);
+  res.status(201).json({ success: true, data: { music } });
+});
+
+export const adminUploadMusic = asyncHandler(async (req, res) => {
+  const music = await createUploadedMusic(req.user, req.body, req.file);
   res.status(201).json({ success: true, data: { music } });
 });
 

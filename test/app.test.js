@@ -129,6 +129,14 @@ test("admin management routes require authentication", async () => {
 
     assert.equal(themesResponse.status, 401);
     assert.equal(themesBody.message, "Akses membutuhkan token.");
+
+    const musicUploadResponse = await fetch(`${baseUrl}/api/admin/music/upload`, {
+      method: "POST"
+    });
+    const musicUploadBody = await musicUploadResponse.json();
+
+    assert.equal(musicUploadResponse.status, 401);
+    assert.equal(musicUploadBody.message, "Akses membutuhkan token.");
   });
 });
 

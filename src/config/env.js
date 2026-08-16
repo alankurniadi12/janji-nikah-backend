@@ -52,6 +52,7 @@ function readEnv() {
       process.env.GOOGLE_CALLBACK_URL || "http://localhost:5000/api/auth/google/callback",
     uploadDir: process.env.UPLOAD_DIR || "/var/www/janji-nikah/uploads",
     maxImageSizeMb: toInteger(process.env.MAX_IMAGE_SIZE_MB, 5),
+    maxAudioSizeMb: toInteger(process.env.MAX_AUDIO_SIZE_MB, 10),
     imageMaxWidth: toInteger(process.env.IMAGE_MAX_WIDTH, 1600),
     imageQuality: toInteger(process.env.IMAGE_QUALITY, 85),
     cleanupIntervalMs: toInteger(process.env.CLEANUP_INTERVAL_MS, 6 * 60 * 60 * 1000),
