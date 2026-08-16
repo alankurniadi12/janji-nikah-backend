@@ -1,7 +1,9 @@
 import Invitation from "../models/Invitation.js";
 import Theme from "../models/Theme.js";
 import User from "../models/User.js";
+import Wish from "../models/Wish.js";
 import { AppError } from "../utils/AppError.js";
+import { toPublicWish } from "./guestService.js";
 import { lockInvitationIfNeeded, toPublicInvitation } from "./invitationService.js";
 
 export async function getPublicInvitation(username, slug, options = {}) {
@@ -49,7 +51,8 @@ export async function getPublicInvitation(username, slug, options = {}) {
       isActive: false,
       isPreview: true,
       redirectUsername,
-      invitation: await toPublicInvitationWithTheme(invitation)
+      invitation: await toPublicInvitationWithTheme(invitation),
+      wishes: []
     };
   }
 
@@ -60,7 +63,8 @@ export async function getPublicInvitation(username, slug, options = {}) {
   return {
     isActive: true,
     redirectUsername,
-    invitation: await toPublicInvitationWithTheme(invitation)
+    invitation: await toPublicInvitationWithTheme(invitation),
+    wishes: await listVisiblePublicWishes(invitation._id)
   };
 }
 
@@ -80,6 +84,19 @@ async function toPublicInvitationWithTheme(invitation) {
         }
       : null
   };
+}
+
+async function listVisiblePublicWishes(invitationId) {
+  const wishes = await Wish.find({
+    invitationId,
+    isHidden: false,
+    deletedAt: null
+  })
+    .sort({ createdAt: -1 })
+    .limit(50)
+    .lean();
+
+  return wishes.map(toPublicWish);
 }
 
 function isInvitationExpired(invitation) {
