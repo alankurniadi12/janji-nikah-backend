@@ -3,6 +3,7 @@ import Invitation from "../models/Invitation.js";
 import Notification from "../models/Notification.js";
 import Transaction from "../models/Transaction.js";
 import User from "../models/User.js";
+import { toPublicInvitation } from "./invitationService.js";
 import { expirePendingTransactions, toPublicTransaction } from "./transactionService.js";
 
 export async function getMemberDashboard(user) {
@@ -10,18 +11,31 @@ export async function getMemberDashboard(user) {
 
   await expirePendingTransactions({ memberId });
 
+  const now = new Date();
+  const next7DaysEnd = addDays(now, 7);
   const [
     activeInvitations,
+    lockedInvitations,
     draftInvitations,
     expiredInvitations,
+    publishedInvitations,
+    expiringSoonInvitations,
     unreadNotifications,
     latestTransaction,
     pendingTransactions,
-    pendingTransactionCount
+    pendingTransactionCount,
+    recentInvitations
   ] = await Promise.all([
-    Invitation.countDocuments({ memberId, status: { $in: ["active", "locked"] } }),
+    Invitation.countDocuments({ memberId, status: "active" }),
+    Invitation.countDocuments({ memberId, status: "locked" }),
     Invitation.countDocuments({ memberId, status: "draft" }),
     Invitation.countDocuments({ memberId, status: "expired" }),
+    Invitation.countDocuments({ memberId, publishedAt: { $ne: null } }),
+    Invitation.countDocuments({
+      memberId,
+      status: { $in: ["active", "locked"] },
+      expiresAt: { $gte: now, $lte: next7DaysEnd }
+    }),
     Notification.countDocuments({
       $or: [{ userId: memberId }, { userId: null, roleTarget: "member" }],
       roleTarget: "member",
@@ -36,15 +50,26 @@ export async function getMemberDashboard(user) {
       .limit(3)
       .select("memberId packageId creditAmount baseAmount uniqueCode totalAmount paymentProofUrl status adminNote expiresAt createdAt updatedAt")
       .lean(),
-    Transaction.countDocuments({ memberId, status: { $in: ["waiting_payment", "waiting_verification"] } })
+    Transaction.countDocuments({ memberId, status: { $in: ["waiting_payment", "waiting_verification"] } }),
+    Invitation.find({ memberId })
+      .sort({ updatedAt: -1, createdAt: -1 })
+      .limit(5)
+      .select("memberId status slug title groom bride events publishedAt lockedAt expiresAt expiredAt summary createdAt updatedAt")
+      .lean()
   ]);
+  const liveInvitations = activeInvitations + lockedInvitations;
 
   return {
     creditBalance: user.creditBalance,
     invitations: {
       active: activeInvitations,
+      locked: lockedInvitations,
+      live: liveInvitations,
       draft: draftInvitations,
-      expired: expiredInvitations
+      expired: expiredInvitations,
+      total: liveInvitations + draftInvitations + expiredInvitations,
+      publishedTotal: publishedInvitations,
+      expiringSoon: expiringSoonInvitations
     },
     notifications: {
       unread: unreadNotifications
@@ -54,9 +79,11 @@ export async function getMemberDashboard(user) {
       total: pendingTransactionCount,
       items: pendingTransactions.map(toPublicTransaction)
     },
+    recentInvitations: recentInvitations.map(toPublicInvitation),
     actions: {
       canCreateInvitation: draftInvitations < 3,
-      draftLimit: 3
+      draftLimit: 3,
+      publishableCredits: user.creditBalance
     }
   };
 }
