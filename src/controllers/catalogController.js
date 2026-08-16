@@ -2,6 +2,7 @@ import {
   createMusic,
   createUploadedMusic,
   createTheme,
+  deleteMusic,
   listActiveMusic,
   listActiveThemes,
   listAdminMusic,
@@ -71,5 +72,10 @@ export const adminUpdateMusic = asyncHandler(async (req, res) => {
 
 export const adminSetMusicStatus = asyncHandler(async (req, res) => {
   const music = await setMusicStatus(req.user, req.params.id, req.body.isActive);
+  res.json({ success: true, data: { music } });
+});
+
+export const adminDeleteMusic = asyncHandler(async (req, res) => {
+  const music = await deleteMusic(req.user, req.params.id);
   res.json({ success: true, data: { music } });
 });

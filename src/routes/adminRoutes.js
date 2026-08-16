@@ -17,6 +17,7 @@ import {
 import {
   adminCreateMusic,
   adminCreateTheme,
+  adminDeleteMusic,
   adminMusic,
   adminSetMusicStatus,
   adminSetThemeStatus,
@@ -69,6 +70,7 @@ adminRoutes.post("/music", adminCreateMusic);
 adminRoutes.post("/music/upload", musicUpload.single("file"), adminUploadMusic);
 adminRoutes.patch("/music/:id", adminUpdateMusic);
 adminRoutes.patch("/music/:id/status", adminSetMusicStatus);
+adminRoutes.delete("/music/:id", adminDeleteMusic);
 adminRoutes.get("/invitations", adminInvitations);
 adminRoutes.get("/invitations/:id", adminInvitationDetail);
 adminRoutes.post("/invitations/:id/unlock", adminUnlockInvitation);

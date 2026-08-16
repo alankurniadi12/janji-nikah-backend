@@ -1,8 +1,13 @@
+import fs from "node:fs/promises";
+import path from "node:path";
+
 import AuditLog from "../models/AuditLog.js";
+import Invitation from "../models/Invitation.js";
 import Music from "../models/Music.js";
 import Theme from "../models/Theme.js";
+import { env } from "../config/env.js";
 import { AppError } from "../utils/AppError.js";
-import { toUploadUrl } from "../utils/fileUrl.js";
+import { toRelativeUploadUrl, toUploadUrl } from "../utils/fileUrl.js";
 
 export function toPublicTheme(theme) {
   return {
@@ -126,6 +131,19 @@ export async function setMusicStatus(admin, musicId, isActive) {
   return toPublicMusic(music);
 }
 
+export async function deleteMusic(admin, musicId) {
+  const music = await Music.findById(musicId);
+  if (!music) throw new AppError(404, "Musik tidak ditemukan.");
+
+  const before = music.toObject();
+  await Invitation.updateMany({ musicId: music._id }, { $unset: { musicId: "" } });
+  await Music.deleteOne({ _id: music._id });
+  await deleteUploadByUrl(music.fileUrl);
+  await logCatalogAction(admin, "music.deleted", "Music", music._id, before, null);
+
+  return toPublicMusic(music);
+}
+
 function validateThemePayload(payload, requireAll) {
   if (requireAll && !payload?.name) throw new AppError(400, "Nama tema wajib diisi.");
   if (requireAll && !payload?.key) throw new AppError(400, "Key tema wajib diisi.");
@@ -157,4 +175,15 @@ function pick(source, keys) {
 
 async function logCatalogAction(actor, action, targetType, targetId, before, after) {
   await AuditLog.create({ actorId: actor._id, action, targetType, targetId, before, after });
+}
+
+async function deleteUploadByUrl(publicUrl) {
+  const relativeUrl = toRelativeUploadUrl(publicUrl);
+
+  if (!relativeUrl.startsWith("/uploads/music/")) {
+    return;
+  }
+
+  const relativePath = relativeUrl.replace(/^\/uploads\//, "");
+  await fs.rm(path.join(env.uploadDir, relativePath), { force: true });
 }
