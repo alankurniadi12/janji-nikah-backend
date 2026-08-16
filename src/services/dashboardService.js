@@ -24,7 +24,8 @@ export async function getMemberDashboard(user) {
     latestTransaction,
     pendingTransactions,
     pendingTransactionCount,
-    recentInvitations
+    recentInvitations,
+    serviceRevenue
   ] = await Promise.all([
     Invitation.countDocuments({ memberId, status: "active" }),
     Invitation.countDocuments({ memberId, status: "locked" }),
@@ -54,8 +55,9 @@ export async function getMemberDashboard(user) {
     Invitation.find({ memberId })
       .sort({ updatedAt: -1, createdAt: -1 })
       .limit(5)
-      .select("memberId status slug title groom bride events publishedAt lockedAt expiresAt expiredAt summary createdAt updatedAt")
-      .lean()
+      .select("memberId status slug title servicePrice groom bride events publishedAt lockedAt expiresAt expiredAt summary createdAt updatedAt")
+      .lean(),
+    getMemberServiceRevenue(memberId)
   ]);
   const liveInvitations = activeInvitations + lockedInvitations;
 
@@ -73,6 +75,11 @@ export async function getMemberDashboard(user) {
     },
     notifications: {
       unread: unreadNotifications
+    },
+    revenue: {
+      serviceTotal: serviceRevenue.total,
+      averageServicePrice: serviceRevenue.average,
+      pricedInvitations: serviceRevenue.count
     },
     latestTransaction: latestTransaction ? toPublicTransaction(latestTransaction) : null,
     pendingTransactions: {
@@ -228,6 +235,32 @@ async function sumSuccessfulRevenue(dateFilter = {}) {
   ]);
 
   return summary.total || 0;
+}
+
+async function getMemberServiceRevenue(memberId) {
+  const [summary = {}] = await Invitation.aggregate([
+    {
+      $match: {
+        memberId,
+        publishedAt: { $ne: null },
+        servicePrice: { $gt: 0 }
+      }
+    },
+    {
+      $group: {
+        _id: null,
+        total: { $sum: "$servicePrice" },
+        count: { $sum: 1 },
+        average: { $avg: "$servicePrice" }
+      }
+    }
+  ]);
+
+  return {
+    total: summary.total || 0,
+    count: summary.count || 0,
+    average: Math.round(summary.average || 0)
+  };
 }
 
 async function sumCreditsSold(dateFilter = {}) {

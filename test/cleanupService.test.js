@@ -11,6 +11,7 @@ test("builds expired invitation summary before details are removed", () => {
       { date: new Date("2026-08-01T00:00:00.000Z") },
       { date: new Date("2026-08-03T00:00:00.000Z") }
     ],
+    servicePrice: 350000,
     publishedAt: new Date("2026-07-01T00:00:00.000Z"),
     summary: {}
   });
@@ -18,6 +19,7 @@ test("builds expired invitation summary before details are removed", () => {
   assert.equal(summary.groomName, "Bima");
   assert.equal(summary.brideName, "Sari");
   assert.equal(summary.latestEventDate.toISOString(), "2026-08-03T00:00:00.000Z");
+  assert.equal(summary.servicePrice, 350000);
   assert.equal(summary.publishedAt.toISOString(), "2026-07-01T00:00:00.000Z");
 });
 
@@ -31,10 +33,12 @@ test("keeps existing summary fields when cleanup runs again", () => {
       groomName: "Bima",
       brideName: "Sari",
       latestEventDate: new Date("2026-08-03T00:00:00.000Z"),
+      servicePrice: 450000,
       publishedAt: new Date("2026-07-01T00:00:00.000Z")
     }
   });
 
   assert.equal(summary.groomName, "Bima");
   assert.equal(summary.brideName, "Sari");
+  assert.equal(summary.servicePrice, 450000);
 });

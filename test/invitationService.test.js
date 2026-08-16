@@ -12,6 +12,7 @@ test("formats enabled quote with Ar-Rum 21 defaults", () => {
     memberId: new mongoose.Types.ObjectId(),
     status: "draft",
     slug: "raka-amara",
+    servicePrice: 250000,
     groom: { fullName: "Raka", parentsName: "" },
     bride: { fullName: "Amara", parentsName: "" },
     events: [],
@@ -24,6 +25,7 @@ test("formats enabled quote with Ar-Rum 21 defaults", () => {
   });
 
   assert.equal(publicInvitation.quote.enabled, true);
+  assert.equal(publicInvitation.servicePrice, 250000);
   assert.match(publicInvitation.quote.text, /pasangan-pasangan/);
   assert.equal(publicInvitation.quote.source, "QS. Ar-Rum: 21");
 });

@@ -30,6 +30,7 @@ export function toPublicInvitation(invitation) {
     status: invitation.status,
     slug: invitation.slug,
     title: invitation.title || createInvitationTitle(invitation.groom?.fullName, invitation.bride?.fullName),
+    servicePrice: invitation.servicePrice || 0,
     groom: {
       ...groom,
       photoUrl: toAbsoluteUploadUrl(groom.photoUrl)
@@ -94,6 +95,7 @@ export async function createDraftInvitation(member, payload = {}) {
     status: "draft",
     slug,
     title: createInvitationTitle(groomName, brideName),
+    servicePrice: normalizeServicePrice(payload.servicePrice),
     groom: normalizeCouple(payload.groom),
     bride: normalizeCouple(payload.bride),
     events: normalizeEvents(payload.events),
@@ -130,6 +132,7 @@ export async function updateMemberInvitation(member, invitationId, payload) {
 
   if (payload.groom !== undefined) invitation.groom = mergeCouple(invitation.groom, payload.groom);
   if (payload.bride !== undefined) invitation.bride = mergeCouple(invitation.bride, payload.bride);
+  if (payload.servicePrice !== undefined) invitation.servicePrice = normalizeServicePrice(payload.servicePrice);
   if (payload.title !== undefined || payload.groom !== undefined || payload.bride !== undefined) {
     invitation.title = createInvitationTitle(invitation.groom.fullName, invitation.bride.fullName);
   }
@@ -224,6 +227,7 @@ export async function publishMemberInvitation(member, invitationId) {
     latestEventDate,
     themeName: theme?.name || "",
     themeKey: theme?.key || "",
+    servicePrice: invitation.servicePrice || 0,
     publishedAt
   };
 
@@ -349,6 +353,20 @@ function mergeCouple(current = {}, next = {}) {
     parentsName: next.parentsName !== undefined ? next.parentsName : current.parentsName || "",
     photoUrl: current.photoUrl || ""
   };
+}
+
+function normalizeServicePrice(value) {
+  if (value === undefined || value === null || value === "") {
+    return 0;
+  }
+
+  const amount = Number(value);
+
+  if (!Number.isFinite(amount) || amount < 0) {
+    throw new AppError(400, "Harga jasa undangan wajib berupa angka minimal 0.");
+  }
+
+  return Math.round(amount);
 }
 
 function normalizeEvents(events = []) {

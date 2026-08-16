@@ -131,6 +131,11 @@ const invitationSchema = new Schema(
       type: String,
       default: ""
     },
+    servicePrice: {
+      type: Number,
+      default: 0,
+      min: 0
+    },
     groom: {
       fullName: { type: String, default: "" },
       parentsName: { type: String, default: "" },

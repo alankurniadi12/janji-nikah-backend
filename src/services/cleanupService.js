@@ -17,6 +17,7 @@ export function buildExpiredInvitationSummary(invitation) {
     brideName: invitation.summary?.brideName || invitation.bride?.fullName || "",
     latestEventDate: invitation.summary?.latestEventDate || latestEventDate || null,
     themeName: invitation.summary?.themeName || "",
+    servicePrice: invitation.summary?.servicePrice || invitation.servicePrice || 0,
     publishedAt: invitation.summary?.publishedAt || invitation.publishedAt || null
   };
 }
