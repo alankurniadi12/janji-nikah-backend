@@ -21,6 +21,7 @@ export function toPublicMusic(music) {
   return {
     id: music._id.toString(),
     title: music.title,
+    artist: music.artist || "",
     category: music.category,
     duration: music.duration,
     fileUrl: music.fileUrl,
@@ -109,7 +110,7 @@ export async function updateMusic(admin, musicId, payload) {
   if (!music) throw new AppError(404, "Musik tidak ditemukan.");
   validateMusicPayload(payload, false);
   const before = music.toObject();
-  Object.assign(music, pick(normalizeMusicPayload(payload), ["title", "category", "duration", "fileUrl"]));
+  Object.assign(music, pick(normalizeMusicPayload(payload), ["title", "artist", "category", "duration", "fileUrl"]));
   await music.save();
   await logCatalogAction(admin, "music.updated", "Music", music._id, before, music.toObject());
   return toPublicMusic(music);
@@ -141,6 +142,7 @@ function normalizeMusicPayload(payload = {}) {
   return {
     ...payload,
     title: payload.title?.trim?.() || payload.title,
+    artist: payload.artist?.trim?.() || "",
     category: payload.category?.trim?.() || "",
     duration: Number.isFinite(duration) && duration >= 0 ? duration : 0
   };

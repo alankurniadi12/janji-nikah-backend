@@ -21,6 +21,7 @@ test("formats music for API responses", () => {
   const music = toPublicMusic({
     _id: { toString: () => "music-id" },
     title: "Akad Syahdu",
+    artist: "Janji Nikah",
     category: "akad",
     duration: 120,
     fileUrl: "/uploads/music/akad.mp3",
@@ -29,4 +30,5 @@ test("formats music for API responses", () => {
 
   assert.equal(music.id, "music-id");
   assert.equal(music.title, "Akad Syahdu");
+  assert.equal(music.artist, "Janji Nikah");
 });

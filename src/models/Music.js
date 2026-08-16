@@ -5,6 +5,7 @@ const { Schema } = mongoose;
 const musicSchema = new Schema(
   {
     title: { type: String, required: true, trim: true },
+    artist: { type: String, default: "", trim: true },
     category: { type: String, default: "", trim: true },
     duration: { type: Number, default: 0, min: 0 },
     fileUrl: { type: String, required: true, trim: true },

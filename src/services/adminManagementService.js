@@ -332,6 +332,7 @@ function toMusicSummary(music) {
   return {
     id: music._id.toString(),
     title: music.title,
+    artist: music.artist || "",
     category: music.category,
     duration: music.duration,
     isActive: music.isActive
