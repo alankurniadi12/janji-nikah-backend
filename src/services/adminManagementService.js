@@ -14,13 +14,14 @@ import { toPublicUser } from "../utils/publicUser.js";
 
 export async function listMembers({ status, q } = {}) {
   const query = { role: "member" };
+  const searchRegex = buildSearchRegex(q);
 
   if (status) query.status = status;
-  if (q) {
+  if (searchRegex) {
     query.$or = [
-      { name: new RegExp(q, "i") },
-      { email: new RegExp(q, "i") },
-      { username: new RegExp(q, "i") }
+      { name: searchRegex },
+      { email: searchRegex },
+      { username: searchRegex }
     ];
   }
 
@@ -129,8 +130,48 @@ export async function adjustMemberCredits(admin, memberId, payload) {
   };
 }
 
-export async function listAdminInvitations({ status } = {}) {
-  const query = status ? { status } : {};
+export async function listAdminInvitations({ status, memberStatus, q } = {}) {
+  const query = {};
+  const searchRegex = buildSearchRegex(q);
+
+  if (status) query.status = status;
+
+  if (memberStatus) {
+    const statusMembers = await User.find({ role: "member", status: memberStatus }).select("_id").lean();
+    const statusMemberIds = statusMembers.map((member) => member._id);
+
+    if (!statusMemberIds.length) {
+      return [];
+    }
+
+    query.memberId = { $in: statusMemberIds };
+  }
+
+  if (searchRegex) {
+    const memberQuery = {
+      role: "member",
+      ...(memberStatus ? { status: memberStatus } : {}),
+      $or: [
+        { name: searchRegex },
+        { email: searchRegex },
+        { username: searchRegex }
+      ]
+    };
+    const matchedMembers = await User.find(memberQuery).select("_id").lean();
+    const memberIds = matchedMembers.map((member) => member._id);
+
+    query.$or = [
+      { title: searchRegex },
+      { slug: searchRegex },
+      { "groom.fullName": searchRegex },
+      { "bride.fullName": searchRegex }
+    ];
+
+    if (memberIds.length) {
+      query.$or.push({ memberId: { $in: memberIds } });
+    }
+  }
+
   const invitations = await Invitation.find(query).sort({ createdAt: -1 }).limit(100).lean();
   const memberIds = [...new Set(invitations.map((invitation) => invitation.memberId?.toString()).filter(Boolean))];
   const members = await User.find({ _id: { $in: memberIds } })
@@ -142,6 +183,20 @@ export async function listAdminInvitations({ status } = {}) {
     ...toPublicInvitation(invitation),
     member: memberMap.get(invitation.memberId?.toString()) || null
   }));
+}
+
+function buildSearchRegex(value) {
+  const trimmedValue = String(value || "").trim();
+
+  if (!trimmedValue) {
+    return null;
+  }
+
+  return new RegExp(escapeRegExp(trimmedValue.slice(0, 80)), "i");
+}
+
+function escapeRegExp(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 export async function getAdminInvitation(invitationId) {
