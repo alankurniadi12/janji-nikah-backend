@@ -1,4 +1,5 @@
 import Invitation from "../models/Invitation.js";
+import BrandingProfile from "../models/BrandingProfile.js";
 import Theme from "../models/Theme.js";
 import User from "../models/User.js";
 import Wish from "../models/Wish.js";
@@ -51,7 +52,7 @@ export async function getPublicInvitation(username, slug, options = {}) {
       isActive: false,
       isPreview: true,
       redirectUsername,
-      invitation: await toPublicInvitationWithTheme(invitation),
+      invitation: await toPublicInvitationWithTheme(invitation, user),
       wishes: []
     };
   }
@@ -63,16 +64,25 @@ export async function getPublicInvitation(username, slug, options = {}) {
   return {
     isActive: true,
     redirectUsername,
-    invitation: await toPublicInvitationWithTheme(invitation),
+    invitation: await toPublicInvitationWithTheme(invitation, user),
     wishes: await listVisiblePublicWishes(invitation._id)
   };
 }
 
-async function toPublicInvitationWithTheme(invitation) {
-  const theme = invitation.themeId ? await Theme.findById(invitation.themeId).lean() : null;
+async function toPublicInvitationWithTheme(invitation, member) {
+  const [theme, brandingProfile] = await Promise.all([
+    invitation.themeId ? Theme.findById(invitation.themeId).lean() : null,
+    BrandingProfile.findOne({ memberId: member._id }).select("businessName").lean()
+  ]);
 
   return {
     ...toPublicInvitation(invitation),
+    creator: {
+      displayName: brandingProfile?.businessName || member.name,
+      memberName: member.name,
+      businessName: brandingProfile?.businessName || "",
+      username: member.username
+    },
     theme: theme
       ? {
           id: theme._id.toString(),
