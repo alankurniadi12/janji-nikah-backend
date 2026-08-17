@@ -1,7 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
+import CreditPackage from "../src/models/CreditPackage.js";
 import Transaction from "../src/models/Transaction.js";
+import User from "../src/models/User.js";
 import { listAdminTransactions, listMemberTransactions, toPublicTransaction } from "../src/services/transactionService.js";
 
 test("formats transaction for API responses", () => {
@@ -178,4 +180,100 @@ test("lists admin transactions with pagination, status filter, and related summa
   assert.equal(calls.find((call) => call.skip).skip, 5);
   assert.equal(calls.find((call) => call.limit).limit, 5);
   assert.equal(calls.filter((call) => call.populate).length, 2);
+});
+
+test("filters admin transactions by search query and created date", async () => {
+  const originalUpdateMany = Transaction.updateMany;
+  const originalCountDocuments = Transaction.countDocuments;
+  const originalFind = Transaction.find;
+  const originalAggregate = Transaction.aggregate;
+  const originalUserFind = User.find;
+  const originalPackageFind = CreditPackage.find;
+  const calls = [];
+
+  Transaction.updateMany = async (query) => {
+    calls.push({ updateMany: query });
+  };
+
+  Transaction.countDocuments = async (query) => {
+    calls.push({ countDocuments: query });
+    return 1;
+  };
+
+  Transaction.find = (query) => {
+    calls.push({ query });
+
+    return {
+      sort() {
+        return this;
+      },
+      skip() {
+        return this;
+      },
+      limit() {
+        return this;
+      },
+      populate() {
+        return this;
+      },
+      lean() {
+        return [];
+      }
+    };
+  };
+
+  Transaction.aggregate = async (pipeline) => {
+    calls.push({ aggregate: pipeline });
+    return [];
+  };
+
+  User.find = (query) => ({
+    select(value) {
+      calls.push({ userFind: query, userSelect: value });
+      return this;
+    },
+    lean() {
+      return [{ _id: "member-id" }];
+    }
+  });
+
+  CreditPackage.find = (query) => ({
+    select(value) {
+      calls.push({ packageFind: query, packageSelect: value });
+      return this;
+    },
+    lean() {
+      return [{ _id: "package-id" }];
+    }
+  });
+
+  try {
+    await listAdminTransactions({
+      page: 1,
+      limit: 10,
+      status: "waiting_verification",
+      q: "raini",
+      dateMode: "date",
+      date: "2026-08-17"
+    });
+  } finally {
+    Transaction.updateMany = originalUpdateMany;
+    Transaction.countDocuments = originalCountDocuments;
+    Transaction.find = originalFind;
+    Transaction.aggregate = originalAggregate;
+    User.find = originalUserFind;
+    CreditPackage.find = originalPackageFind;
+  }
+
+  const query = calls.find((call) => call.countDocuments).countDocuments;
+
+  assert.equal(query.status, "waiting_verification");
+  assert.deepEqual(query.createdAt, {
+    $gte: new Date("2026-08-17T00:00:00.000Z"),
+    $lt: new Date("2026-08-18T00:00:00.000Z")
+  });
+  assert.ok(query.$or.some((condition) => condition.memberId));
+  assert.ok(query.$or.some((condition) => condition.packageId));
+  assert.ok(calls.find((call) => call.userFind));
+  assert.ok(calls.find((call) => call.packageFind));
 });

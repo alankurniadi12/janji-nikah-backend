@@ -272,7 +272,8 @@ export async function listAdminTransactions(params = {}) {
 
   const requestedPage = normalizePositiveInteger(params.page, DEFAULT_TRANSACTION_PAGE);
   const limit = Math.min(normalizePositiveInteger(params.limit, DEFAULT_TRANSACTION_LIMIT), MAX_TRANSACTION_LIMIT);
-  const query = buildAdminTransactionListQuery(params);
+  const query = await buildAdminTransactionListQuery(params);
+  const summaryQuery = await buildAdminTransactionListQuery({ ...params, status: "" });
   const total = await Transaction.countDocuments(query);
   const totalPages = Math.max(1, Math.ceil(total / limit));
   const page = Math.min(requestedPage, totalPages);
@@ -285,7 +286,7 @@ export async function listAdminTransactions(params = {}) {
       .populate("memberId", "name email username status creditBalance")
       .populate("packageId", "name creditAmount price isActive promoCode startsAt endsAt")
       .lean(),
-    getTransactionSummary()
+    getTransactionSummary(summaryQuery)
   ]);
 
   return {
@@ -444,12 +445,24 @@ function buildMemberTransactionListQuery(member, params = {}) {
   return query;
 }
 
-function buildAdminTransactionListQuery(params = {}) {
-  if (!TRANSACTION_STATUSES.includes(params.status)) {
-    return {};
+async function buildAdminTransactionListQuery(params = {}) {
+  const query = {};
+  const createdAtRange = buildCreatedAtRange(params);
+  const searchConditions = await buildAdminTransactionSearchConditions(params.q);
+
+  if (TRANSACTION_STATUSES.includes(params.status)) {
+    query.status = params.status;
   }
 
-  return { status: params.status };
+  if (createdAtRange) {
+    query.createdAt = createdAtRange;
+  }
+
+  if (searchConditions.length) {
+    query.$or = searchConditions;
+  }
+
+  return query;
 }
 
 function normalizePositiveInteger(value, fallback) {
@@ -464,6 +477,98 @@ function normalizePositiveInteger(value, fallback) {
 
 async function getMemberTransactionSummary(memberId) {
   return getTransactionSummary({ memberId });
+}
+
+async function buildAdminTransactionSearchConditions(value) {
+  const query = cleanText(value);
+
+  if (!query) {
+    return [];
+  }
+
+  const searchRegex = buildSearchRegex(query);
+  const [members, packages] = await Promise.all([
+    User.find({
+      role: "member",
+      $or: [
+        { name: searchRegex },
+        { email: searchRegex },
+        { username: searchRegex }
+      ]
+    })
+      .select("_id")
+      .lean(),
+    CreditPackage.find({
+      $or: [
+        { name: searchRegex },
+        { promoCode: searchRegex }
+      ]
+    })
+      .select("_id")
+      .lean()
+  ]);
+  const conditions = [
+    { promoCode: searchRegex },
+    { adminNote: searchRegex }
+  ];
+  const digitsOnlyQuery = query.replace(/\D/g, "");
+  const numericQuery = Number(digitsOnlyQuery);
+
+  if (members.length) {
+    conditions.push({ memberId: { $in: members.map((member) => member._id) } });
+  }
+
+  if (packages.length) {
+    conditions.push({ packageId: { $in: packages.map((creditPackage) => creditPackage._id) } });
+  }
+
+  if (/^[0-9a-f]{24}$/i.test(query)) {
+    conditions.push({ _id: query });
+  }
+
+  if (digitsOnlyQuery && Number.isInteger(numericQuery) && numericQuery >= 0) {
+    conditions.push({ totalAmount: numericQuery }, { uniqueCode: numericQuery });
+  }
+
+  return conditions;
+}
+
+function buildCreatedAtRange({ dateMode, date, month } = {}) {
+  if (dateMode === "date" && isDateInput(date)) {
+    const start = new Date(`${date}T00:00:00.000Z`);
+    const end = new Date(start);
+    end.setUTCDate(end.getUTCDate() + 1);
+    return { $gte: start, $lt: end };
+  }
+
+  if (dateMode === "month" && isMonthInput(month)) {
+    const start = new Date(`${month}-01T00:00:00.000Z`);
+    const end = new Date(start);
+    end.setUTCMonth(end.getUTCMonth() + 1);
+    return { $gte: start, $lt: end };
+  }
+
+  return null;
+}
+
+function buildSearchRegex(value) {
+  return new RegExp(escapeRegex(value), "i");
+}
+
+function escapeRegex(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function isDateInput(value) {
+  return typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value);
+}
+
+function isMonthInput(value) {
+  return typeof value === "string" && /^\d{4}-\d{2}$/.test(value);
+}
+
+function cleanText(value) {
+  return typeof value === "string" ? value.trim() : "";
 }
 
 async function getTransactionSummary(match = {}) {
