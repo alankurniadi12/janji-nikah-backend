@@ -74,13 +74,11 @@ export const memberUploadPaymentProof = asyncHandler(async (req, res) => {
 });
 
 export const adminTransactions = asyncHandler(async (req, res) => {
-  const transactions = await listAdminTransactions({ status: req.query.status });
+  const data = await listAdminTransactions(req.query);
 
   res.json({
     success: true,
-    data: {
-      transactions
-    }
+    data
   });
 });
 

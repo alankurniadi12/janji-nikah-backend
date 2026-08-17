@@ -267,16 +267,39 @@ export async function attachPaymentProof(member, transactionId, paymentProofUrl)
   return toPublicTransaction(transaction);
 }
 
-export async function listAdminTransactions({ status } = {}) {
+export async function listAdminTransactions(params = {}) {
   await expirePendingTransactions();
 
-  const query = status ? { status } : {};
-  const transactions = await Transaction.find(query)
-    .sort({ createdAt: -1 })
-    .populate("memberId", "name email username status creditBalance")
-    .populate("packageId", "name creditAmount price isActive promoCode startsAt endsAt")
-    .lean();
-  return transactions.map(toPublicAdminTransaction);
+  const requestedPage = normalizePositiveInteger(params.page, DEFAULT_TRANSACTION_PAGE);
+  const limit = Math.min(normalizePositiveInteger(params.limit, DEFAULT_TRANSACTION_LIMIT), MAX_TRANSACTION_LIMIT);
+  const query = buildAdminTransactionListQuery(params);
+  const total = await Transaction.countDocuments(query);
+  const totalPages = Math.max(1, Math.ceil(total / limit));
+  const page = Math.min(requestedPage, totalPages);
+  const skip = (page - 1) * limit;
+  const [transactions, summary] = await Promise.all([
+    Transaction.find(query)
+      .sort({ createdAt: -1, _id: -1 })
+      .skip(skip)
+      .limit(limit)
+      .populate("memberId", "name email username status creditBalance")
+      .populate("packageId", "name creditAmount price isActive promoCode startsAt endsAt")
+      .lean(),
+    getTransactionSummary()
+  ]);
+
+  return {
+    transactions: transactions.map(toPublicAdminTransaction),
+    pagination: {
+      page,
+      limit,
+      total,
+      totalPages,
+      hasPreviousPage: page > 1,
+      hasNextPage: page < totalPages
+    },
+    summary
+  };
 }
 
 export async function getAdminTransaction(transactionId) {
@@ -421,6 +444,14 @@ function buildMemberTransactionListQuery(member, params = {}) {
   return query;
 }
 
+function buildAdminTransactionListQuery(params = {}) {
+  if (!TRANSACTION_STATUSES.includes(params.status)) {
+    return {};
+  }
+
+  return { status: params.status };
+}
+
 function normalizePositiveInteger(value, fallback) {
   const number = Number(value);
 
@@ -432,8 +463,12 @@ function normalizePositiveInteger(value, fallback) {
 }
 
 async function getMemberTransactionSummary(memberId) {
+  return getTransactionSummary({ memberId });
+}
+
+async function getTransactionSummary(match = {}) {
   const rows = await Transaction.aggregate([
-    { $match: { memberId } },
+    { $match: match },
     { $group: { _id: "$status", total: { $sum: 1 } } }
   ]);
   const summary = {
