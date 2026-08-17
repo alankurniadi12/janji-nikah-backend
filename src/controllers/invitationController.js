@@ -17,13 +17,11 @@ import {
 import { asyncHandler } from "../utils/asyncHandler.js";
 
 export const memberInvitations = asyncHandler(async (req, res) => {
-  const invitations = await listMemberInvitations(req.user);
+  const data = await listMemberInvitations(req.user, req.query);
 
   res.json({
     success: true,
-    data: {
-      invitations
-    }
+    data
   });
 });
 

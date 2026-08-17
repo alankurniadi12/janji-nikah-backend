@@ -19,6 +19,9 @@ const HEX_COLOR_PATTERN = /^#[0-9a-f]{6}$/i;
 const DEFAULT_QUOTE_TEXT =
   "Dan di antara tanda-tanda kekuasaan-Nya ialah Dia menciptakan untukmu pasangan-pasangan dari jenismu sendiri, supaya kamu cenderung dan merasa tenteram kepadanya, dan Dia menjadikan di antaramu rasa kasih dan sayang.";
 const DEFAULT_QUOTE_SOURCE = "QS. Ar-Rum: 21";
+const DEFAULT_INVITATION_PAGE = 1;
+const DEFAULT_INVITATION_LIMIT = 10;
+const MAX_INVITATION_LIMIT = 50;
 
 export function toPublicInvitation(invitation) {
   const groom = invitation.groom?.toObject?.() || invitation.groom || {};
@@ -70,12 +73,36 @@ export function toMemberInvitation(invitation, member = null) {
   };
 }
 
-export async function listMemberInvitations(member) {
-  const invitations = await Invitation.find({ memberId: member._id })
+export async function listMemberInvitations(member, params = {}) {
+  const requestedPage = normalizePositiveInteger(params.page, DEFAULT_INVITATION_PAGE);
+  const limit = Math.min(normalizePositiveInteger(params.limit, DEFAULT_INVITATION_LIMIT), MAX_INVITATION_LIMIT);
+  const query = buildMemberInvitationListQuery(member, params);
+  const total = await Invitation.countDocuments(query);
+  const totalPages = Math.max(1, Math.ceil(total / limit));
+  const page = Math.min(requestedPage, totalPages);
+  const skip = (page - 1) * limit;
+
+  const invitations = await Invitation.find(query)
     .select("+hostAccessToken")
-    .sort({ createdAt: -1, _id: -1 });
+    .sort({ createdAt: -1, _id: -1 })
+    .skip(skip)
+    .limit(limit);
+  const summary = await getMemberInvitationSummary(member._id);
+
   await Promise.all(invitations.map(ensureHostAccessToken));
-  return invitations.map((invitation) => toMemberInvitation(invitation, member));
+
+  return {
+    invitations: invitations.map((invitation) => toMemberInvitation(invitation, member)),
+    pagination: {
+      page,
+      limit,
+      total,
+      totalPages,
+      hasPreviousPage: page > 1,
+      hasNextPage: page < totalPages
+    },
+    summary
+  };
 }
 
 export async function createDraftInvitation(member, payload = {}) {
@@ -514,6 +541,103 @@ function normalizeEnvelope(envelope = {}) {
 
 function cleanText(value) {
   return typeof value === "string" ? value.trim() : "";
+}
+
+function buildMemberInvitationListQuery(member, params = {}) {
+  const query = { memberId: member._id };
+  const searchRegex = buildSearchRegex(params.q);
+  const createdAtRange = buildCreatedAtRange(params);
+
+  if (searchRegex) {
+    query.$or = [
+      { title: searchRegex },
+      { slug: searchRegex },
+      { "groom.fullName": searchRegex },
+      { "bride.fullName": searchRegex }
+    ];
+  }
+
+  if (createdAtRange) {
+    query.createdAt = createdAtRange;
+  }
+
+  return query;
+}
+
+function buildCreatedAtRange({ dateMode, date, month } = {}) {
+  if (dateMode === "date" && isDateInput(date)) {
+    const start = new Date(`${date}T00:00:00.000Z`);
+    const end = new Date(start);
+    end.setUTCDate(end.getUTCDate() + 1);
+    return { $gte: start, $lt: end };
+  }
+
+  if (dateMode === "month" && isMonthInput(month)) {
+    const start = new Date(`${month}-01T00:00:00.000Z`);
+    const end = new Date(start);
+    end.setUTCMonth(end.getUTCMonth() + 1);
+    return { $gte: start, $lt: end };
+  }
+
+  return null;
+}
+
+function buildSearchRegex(value) {
+  const query = cleanText(value);
+
+  if (!query) {
+    return null;
+  }
+
+  return new RegExp(escapeRegex(query), "i");
+}
+
+function escapeRegex(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function isDateInput(value) {
+  return typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value);
+}
+
+function isMonthInput(value) {
+  return typeof value === "string" && /^\d{4}-\d{2}$/.test(value);
+}
+
+function normalizePositiveInteger(value, fallback) {
+  const number = Number(value);
+
+  if (!Number.isInteger(number) || number < 1) {
+    return fallback;
+  }
+
+  return number;
+}
+
+async function getMemberInvitationSummary(memberId) {
+  const rows = await Invitation.aggregate([
+    { $match: { memberId } },
+    { $group: { _id: "$status", total: { $sum: 1 } } }
+  ]);
+  const summary = {
+    total: 0,
+    draft: 0,
+    active: 0,
+    locked: 0,
+    live: 0,
+    expired: 0
+  };
+
+  rows.forEach((row) => {
+    if (Object.prototype.hasOwnProperty.call(summary, row._id)) {
+      summary[row._id] = row.total;
+    }
+    summary.total += row.total;
+  });
+
+  summary.live = summary.active + summary.locked;
+
+  return summary;
 }
 
 function validateInvitationReadyToPublish(invitation) {
