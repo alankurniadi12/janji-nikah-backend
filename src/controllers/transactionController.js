@@ -35,13 +35,11 @@ export const memberRedeemPromoCode = asyncHandler(async (req, res) => {
 });
 
 export const memberTransactions = asyncHandler(async (req, res) => {
-  const transactions = await listMemberTransactions(req.user);
+  const data = await listMemberTransactions(req.user, req.query);
 
   res.json({
     success: true,
-    data: {
-      transactions
-    }
+    data
   });
 });
 

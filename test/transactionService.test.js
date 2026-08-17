@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { toPublicTransaction } from "../src/services/transactionService.js";
+import Transaction from "../src/models/Transaction.js";
+import { listMemberTransactions, toPublicTransaction } from "../src/services/transactionService.js";
 
 test("formats transaction for API responses", () => {
   const transaction = toPublicTransaction({
@@ -28,4 +29,77 @@ test("formats transaction for API responses", () => {
   assert.equal(transaction.memberId, "member-id");
   assert.equal(transaction.totalAmount, 25163);
   assert.equal(transaction.status, "waiting_verification");
+});
+
+test("lists member transactions with pagination and status filter", async () => {
+  const originalUpdateMany = Transaction.updateMany;
+  const originalCountDocuments = Transaction.countDocuments;
+  const originalFind = Transaction.find;
+  const originalAggregate = Transaction.aggregate;
+  const calls = [];
+
+  Transaction.updateMany = async (query) => {
+    calls.push({ updateMany: query });
+  };
+
+  Transaction.countDocuments = async (query) => {
+    calls.push({ countDocuments: query });
+    return 21;
+  };
+
+  Transaction.find = (query) => {
+    calls.push({ query });
+
+    return {
+      sort(value) {
+        calls.push({ sort: value });
+        return this;
+      },
+      skip(value) {
+        calls.push({ skip: value });
+        return this;
+      },
+      limit(value) {
+        calls.push({ limit: value });
+        return this;
+      },
+      lean() {
+        calls.push({ lean: true });
+        return [];
+      }
+    };
+  };
+
+  Transaction.aggregate = async (pipeline) => {
+    calls.push({ aggregate: pipeline });
+    return [{ _id: "success", total: 8 }];
+  };
+
+  try {
+    const member = { _id: "member-id" };
+    const data = await listMemberTransactions(member, { page: 2, limit: 10, status: "success" });
+
+    assert.deepEqual(data.pagination, {
+      page: 2,
+      limit: 10,
+      total: 21,
+      totalPages: 3,
+      hasPreviousPage: true,
+      hasNextPage: true
+    });
+    assert.equal(data.summary.success, 8);
+  } finally {
+    Transaction.updateMany = originalUpdateMany;
+    Transaction.countDocuments = originalCountDocuments;
+    Transaction.find = originalFind;
+    Transaction.aggregate = originalAggregate;
+  }
+
+  assert.deepEqual(calls.find((call) => call.countDocuments).countDocuments, {
+    memberId: "member-id",
+    status: "success"
+  });
+  assert.deepEqual(calls.find((call) => call.sort).sort, { createdAt: -1, _id: -1 });
+  assert.equal(calls.find((call) => call.skip).skip, 10);
+  assert.equal(calls.find((call) => call.limit).limit, 10);
 });

@@ -8,6 +8,16 @@ import { calculateTotalAmount, createUniquePaymentCode } from "../utils/money.js
 import { buildActivePackageQuery, expireElapsedCreditPackages } from "./creditPackageService.js";
 
 const TRANSACTION_EXPIRY_MS = 24 * 60 * 60 * 1000;
+const DEFAULT_TRANSACTION_PAGE = 1;
+const DEFAULT_TRANSACTION_LIMIT = 10;
+const MAX_TRANSACTION_LIMIT = 50;
+const TRANSACTION_STATUSES = [
+  "waiting_payment",
+  "waiting_verification",
+  "success",
+  "rejected",
+  "expired"
+];
 
 export async function expirePendingTransactions(filter = {}) {
   await Transaction.updateMany(
@@ -192,11 +202,33 @@ export async function redeemMemberPromoCode(member, promoCode) {
   return toPublicTransaction(transaction);
 }
 
-export async function listMemberTransactions(member) {
+export async function listMemberTransactions(member, params = {}) {
   await expirePendingTransactions({ memberId: member._id });
 
-  const transactions = await Transaction.find({ memberId: member._id }).sort({ createdAt: -1 }).lean();
-  return transactions.map(toPublicTransaction);
+  const requestedPage = normalizePositiveInteger(params.page, DEFAULT_TRANSACTION_PAGE);
+  const limit = Math.min(normalizePositiveInteger(params.limit, DEFAULT_TRANSACTION_LIMIT), MAX_TRANSACTION_LIMIT);
+  const query = buildMemberTransactionListQuery(member, params);
+  const total = await Transaction.countDocuments(query);
+  const totalPages = Math.max(1, Math.ceil(total / limit));
+  const page = Math.min(requestedPage, totalPages);
+  const skip = (page - 1) * limit;
+  const [transactions, summary] = await Promise.all([
+    Transaction.find(query).sort({ createdAt: -1, _id: -1 }).skip(skip).limit(limit).lean(),
+    getMemberTransactionSummary(member._id)
+  ]);
+
+  return {
+    transactions: transactions.map(toPublicTransaction),
+    pagination: {
+      page,
+      limit,
+      total,
+      totalPages,
+      hasPreviousPage: page > 1,
+      hasNextPage: page < totalPages
+    },
+    summary
+  };
 }
 
 export async function getMemberTransaction(member, transactionId) {
@@ -377,4 +409,48 @@ function toIdString(value) {
 
 function normalizePromoCode(value) {
   return String(value || "").trim().toUpperCase();
+}
+
+function buildMemberTransactionListQuery(member, params = {}) {
+  const query = { memberId: member._id };
+
+  if (TRANSACTION_STATUSES.includes(params.status)) {
+    query.status = params.status;
+  }
+
+  return query;
+}
+
+function normalizePositiveInteger(value, fallback) {
+  const number = Number(value);
+
+  if (!Number.isInteger(number) || number < 1) {
+    return fallback;
+  }
+
+  return number;
+}
+
+async function getMemberTransactionSummary(memberId) {
+  const rows = await Transaction.aggregate([
+    { $match: { memberId } },
+    { $group: { _id: "$status", total: { $sum: 1 } } }
+  ]);
+  const summary = {
+    total: 0,
+    waiting_payment: 0,
+    waiting_verification: 0,
+    success: 0,
+    rejected: 0,
+    expired: 0
+  };
+
+  rows.forEach((row) => {
+    if (Object.prototype.hasOwnProperty.call(summary, row._id)) {
+      summary[row._id] = row.total;
+    }
+    summary.total += row.total;
+  });
+
+  return summary;
 }
