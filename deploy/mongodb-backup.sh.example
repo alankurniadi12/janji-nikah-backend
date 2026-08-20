@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+BACKUP_ROOT="/var/backups/janji-nikah/mongodb"
+RETENTION_DAYS=14
+TIMESTAMP="$(date +%Y%m%d-%H%M%S)"
+TARGET_DIR="${BACKUP_ROOT}/${TIMESTAMP}"
+ARCHIVE_PATH="${BACKUP_ROOT}/janji-nikah-${TIMESTAMP}.archive.gz"
+
+mkdir -p "${TARGET_DIR}"
+
+mongodump \
+  --uri="mongodb://janji_nikah_backup:<mongodb-backup-password>@127.0.0.1:27017/janji-nikah?authSource=admin" \
+  --archive="${ARCHIVE_PATH}" \
+  --gzip
+
+sha256sum "${ARCHIVE_PATH}" > "${ARCHIVE_PATH}.sha256"
+
+find "${BACKUP_ROOT}" -type f -name "janji-nikah-*.archive.gz" -mtime "+${RETENTION_DAYS}" -delete
+find "${BACKUP_ROOT}" -type f -name "janji-nikah-*.archive.gz.sha256" -mtime "+${RETENTION_DAYS}" -delete
+
+echo "MongoDB backup created: ${ARCHIVE_PATH}"

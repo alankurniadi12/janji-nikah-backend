@@ -1,0 +1,23 @@
+[Unit]
+Description=Janji Nikah Backend API
+After=network.target mongod.service
+Wants=mongod.service
+
+[Service]
+Type=simple
+User=janji
+Group=www-data
+WorkingDirectory=/var/www/janji-nikah/backend/current
+EnvironmentFile=/etc/janji-nikah/backend.env
+ExecStart=/usr/bin/npm start
+Restart=always
+RestartSec=5
+SyslogIdentifier=janji-nikah-backend
+
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ReadWritePaths=/var/www/janji-nikah/uploads
+
+[Install]
+WantedBy=multi-user.target
