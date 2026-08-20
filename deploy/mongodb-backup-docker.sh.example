@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+BACKUP_ROOT="/var/backups/janji-nikah/mongodb"
+RETENTION_DAYS=14
+TIMESTAMP="$(date +%Y%m%d-%H%M%S)"
+ARCHIVE_PATH="${BACKUP_ROOT}/janji-nikah-${TIMESTAMP}.archive.gz"
+COMPOSE_FILE="/var/www/janji-nikah/backend/current/deploy/docker-compose.prod.yml"
+
+mkdir -p "${BACKUP_ROOT}"
+
+docker compose -f "${COMPOSE_FILE}" exec -T mongo \
+  mongodump \
+    --username="janji_nikah_backup" \
+    --password="<mongodb-backup-password>" \
+    --authenticationDatabase="admin" \
+    --db="janji-nikah" \
+    --archive \
+    --gzip > "${ARCHIVE_PATH}"
+
+sha256sum "${ARCHIVE_PATH}" > "${ARCHIVE_PATH}.sha256"
+
+find "${BACKUP_ROOT}" -type f -name "janji-nikah-*.archive.gz" -mtime "+${RETENTION_DAYS}" -delete
+find "${BACKUP_ROOT}" -type f -name "janji-nikah-*.archive.gz.sha256" -mtime "+${RETENTION_DAYS}" -delete
+
+echo "MongoDB backup created: ${ARCHIVE_PATH}"

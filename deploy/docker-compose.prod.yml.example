@@ -1,0 +1,52 @@
+services:
+  backend:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    image: janji-nikah-backend:prod
+    container_name: janji-nikah-backend
+    restart: unless-stopped
+    env_file:
+      - /etc/janji-nikah/backend.env
+    depends_on:
+      mongo:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:5010:5010"
+    volumes:
+      - /var/www/janji-nikah/uploads:/var/www/janji-nikah/uploads
+    networks:
+      - janji-nikah
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:5010/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
+  mongo:
+    image: mongo:8.0
+    container_name: janji-nikah-mongo
+    restart: unless-stopped
+    env_file:
+      - /etc/janji-nikah/mongo.env
+    command: ["mongod", "--bind_ip_all", "--auth"]
+    volumes:
+      - janji_nikah_mongo_data:/data/db
+      - ./mongo-init:/docker-entrypoint-initdb.d:ro
+    networks:
+      - janji-nikah
+    healthcheck:
+      test: ["CMD-SHELL", "mongosh --quiet -u \"$${MONGO_INITDB_ROOT_USERNAME}\" -p \"$${MONGO_INITDB_ROOT_PASSWORD}\" --authenticationDatabase admin --eval \"db.adminCommand('ping').ok\""]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
+networks:
+  janji-nikah:
+    name: janji-nikah
+
+volumes:
+  janji_nikah_mongo_data:
+    name: janji_nikah_mongo_data
