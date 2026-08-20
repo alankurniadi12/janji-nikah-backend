@@ -22,12 +22,11 @@
     "express-rate-limit": "^7.4.0",
     "google-auth-library": "^10.9.0",
     "helmet": "^7.1.0",
-    "google-auth-library": "^10.4.1",
     "jsonwebtoken": "^9.0.2",
     "mongoose": "^8.5.3",
     "morgan": "^1.10.0",
     "multer": "^2.2.0",
-    "sharp": "^0.33.5"
+    "sharp": "^0.35.3"
   },
   "devDependencies": {
     "nodemon": "^3.1.4"
