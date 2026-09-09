@@ -25,8 +25,10 @@ import {
 } from "../controllers/guestController.js";
 import {
   memberCreateInvitation,
+  memberDeleteCouplePhoto,
   memberDeleteInvitation,
   memberDeleteGalleryPhoto,
+  memberDeleteMainPhoto,
   memberInvitationDetail,
   memberInvitations,
   memberPreviewInvitation,
@@ -83,11 +85,13 @@ memberRoutes.post(
   invitationPhotoUpload.single("photo"),
   memberUploadMainPhoto
 );
+memberRoutes.delete("/invitations/:id/photos/main", memberDeleteMainPhoto);
 memberRoutes.post(
   "/invitations/:id/photos/couple/:role",
   invitationPhotoUpload.single("photo"),
   memberUploadCouplePhoto
 );
+memberRoutes.delete("/invitations/:id/photos/couple/:role", memberDeleteCouplePhoto);
 memberRoutes.post(
   "/invitations/:id/photos/gallery",
   invitationPhotoUpload.single("photo"),

@@ -202,6 +202,22 @@ test("invitation builder routes require authentication", async () => {
     assert.equal(photoResponse.status, 401);
     assert.equal(photoBody.message, "Akses membutuhkan token.");
 
+    const deleteMainPhotoResponse = await fetch(`${baseUrl}/api/member/invitations/id/photos/main`, {
+      method: "DELETE"
+    });
+    const deleteMainPhotoBody = await deleteMainPhotoResponse.json();
+
+    assert.equal(deleteMainPhotoResponse.status, 401);
+    assert.equal(deleteMainPhotoBody.message, "Akses membutuhkan token.");
+
+    const deleteCouplePhotoResponse = await fetch(`${baseUrl}/api/member/invitations/id/photos/couple/groom`, {
+      method: "DELETE"
+    });
+    const deleteCouplePhotoBody = await deleteCouplePhotoResponse.json();
+
+    assert.equal(deleteCouplePhotoResponse.status, 401);
+    assert.equal(deleteCouplePhotoBody.message, "Akses membutuhkan token.");
+
     const publishResponse = await fetch(`${baseUrl}/api/member/invitations/id/publish`, {
       method: "POST"
     });

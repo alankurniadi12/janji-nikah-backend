@@ -38,6 +38,21 @@ export async function replaceMainPhoto(member, invitationId, file) {
   return toPublicInvitation(invitation);
 }
 
+export async function deleteMainPhoto(member, invitationId) {
+  const invitation = await findEditableInvitation(member, invitationId);
+  const photoUrl = invitation.mainPhotoUrl;
+
+  if (!photoUrl) {
+    throw new AppError(404, "Foto utama tidak ditemukan.");
+  }
+
+  invitation.mainPhotoUrl = "";
+  await invitation.save();
+  await deleteUploadByUrl(photoUrl);
+
+  return toPublicInvitation(invitation);
+}
+
 export async function replaceCouplePhoto(member, invitationId, role, file) {
   assertUploadedFile(file);
 
@@ -65,6 +80,30 @@ export async function replaceCouplePhoto(member, invitationId, role, file) {
   };
   await invitation.save();
   await deleteUploadByUrl(oldPhotoUrl);
+
+  return toPublicInvitation(invitation);
+}
+
+export async function deleteCouplePhoto(member, invitationId, role) {
+  const coupleField = COUPLE_PHOTO_FIELDS.get(role);
+
+  if (!coupleField) {
+    throw new AppError(400, "Jenis foto pengantin tidak valid.");
+  }
+
+  const invitation = await findEditableInvitation(member, invitationId);
+  const photoUrl = invitation[coupleField]?.photoUrl;
+
+  if (!photoUrl) {
+    throw new AppError(404, "Foto pengantin tidak ditemukan.");
+  }
+
+  invitation[coupleField] = {
+    ...(invitation[coupleField]?.toObject?.() || invitation[coupleField] || {}),
+    photoUrl: ""
+  };
+  await invitation.save();
+  await deleteUploadByUrl(photoUrl);
 
   return toPublicInvitation(invitation);
 }

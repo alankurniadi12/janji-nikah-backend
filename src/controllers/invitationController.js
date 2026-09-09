@@ -9,7 +9,9 @@ import {
 } from "../services/invitationService.js";
 import {
   addGalleryPhoto,
+  deleteCouplePhoto,
   deleteGalleryPhoto,
+  deleteMainPhoto,
   replaceCouplePhoto,
   replaceLoveStoryPhoto,
   replaceMainPhoto
@@ -98,8 +100,30 @@ export const memberUploadMainPhoto = asyncHandler(async (req, res) => {
   });
 });
 
+export const memberDeleteMainPhoto = asyncHandler(async (req, res) => {
+  const invitation = await deleteMainPhoto(req.user, req.params.id);
+
+  res.json({
+    success: true,
+    data: {
+      invitation
+    }
+  });
+});
+
 export const memberUploadCouplePhoto = asyncHandler(async (req, res) => {
   const invitation = await replaceCouplePhoto(req.user, req.params.id, req.params.role, req.file);
+
+  res.json({
+    success: true,
+    data: {
+      invitation
+    }
+  });
+});
+
+export const memberDeleteCouplePhoto = asyncHandler(async (req, res) => {
+  const invitation = await deleteCouplePhoto(req.user, req.params.id, req.params.role);
 
   res.json({
     success: true,
