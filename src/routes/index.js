@@ -7,6 +7,7 @@ import { musicRoutes, themeRoutes } from "./catalogRoutes.js";
 import { healthRoutes } from "./healthRoutes.js";
 import { memberRoutes } from "./memberRoutes.js";
 import { publicInvitationRoutes } from "./publicInvitationRoutes.js";
+import { webhookRoutes } from "./webhookRoutes.js";
 
 export const apiRoutes = Router();
 
@@ -18,3 +19,4 @@ apiRoutes.use("/member", memberRoutes);
 apiRoutes.use("/music", musicRoutes);
 apiRoutes.use("/public", publicInvitationRoutes);
 apiRoutes.use("/themes", themeRoutes);
+apiRoutes.use("/webhooks", webhookRoutes);

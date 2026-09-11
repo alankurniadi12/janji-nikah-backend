@@ -33,8 +33,15 @@ const transactionSchema = new Schema(
     },
     paymentMethod: {
       type: String,
-      enum: ["manual_transfer", "promo_code"],
+      enum: ["manual_transfer", "promo_code", "mayar"],
       default: "manual_transfer",
+      required: true,
+      index: true
+    },
+    paymentProvider: {
+      type: String,
+      enum: ["manual", "promo", "mayar"],
+      default: "manual",
       required: true,
       index: true
     },
@@ -52,6 +59,45 @@ const transactionSchema = new Schema(
     paymentProofUrl: {
       type: String,
       default: ""
+    },
+    providerPaymentId: {
+      type: String,
+      default: "",
+      trim: true,
+      index: true
+    },
+    providerTransactionId: {
+      type: String,
+      default: "",
+      trim: true,
+      index: true
+    },
+    providerCheckoutUrl: {
+      type: String,
+      default: "",
+      trim: true
+    },
+    providerStatus: {
+      type: String,
+      default: "",
+      trim: true
+    },
+    providerPaymentMethod: {
+      type: String,
+      default: "",
+      trim: true
+    },
+    providerPaidAt: {
+      type: Date,
+      default: null
+    },
+    providerVerifiedAt: {
+      type: Date,
+      default: null
+    },
+    providerPayload: {
+      type: Schema.Types.Mixed,
+      default: null
     },
     status: {
       type: String,

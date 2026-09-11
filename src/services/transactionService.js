@@ -1,13 +1,16 @@
 import AuditLog from "../models/AuditLog.js";
 import CreditLedger from "../models/CreditLedger.js";
 import CreditPackage from "../models/CreditPackage.js";
+import MayarWebhookEvent from "../models/MayarWebhookEvent.js";
 import Transaction from "../models/Transaction.js";
 import User from "../models/User.js";
+import { env } from "../config/env.js";
 import { AppError } from "../utils/AppError.js";
-import { calculateTotalAmount, createUniquePaymentCode } from "../utils/money.js";
+import { createMayarPaymentRequest, getMayarTransactionDetail } from "./mayarService.js";
 import { buildActivePackageQuery, expireElapsedCreditPackages } from "./creditPackageService.js";
 
 const TRANSACTION_EXPIRY_MS = 24 * 60 * 60 * 1000;
+const WEBHOOK_LEASE_MS = 5 * 60 * 1000;
 const DEFAULT_TRANSACTION_PAGE = 1;
 const DEFAULT_TRANSACTION_LIMIT = 10;
 const MAX_TRANSACTION_LIMIT = 50;
@@ -44,8 +47,16 @@ export function toPublicTransaction(transaction) {
     uniqueCode: transaction.uniqueCode,
     totalAmount: transaction.totalAmount,
     paymentMethod: transaction.paymentMethod || "manual_transfer",
+    paymentProvider: transaction.paymentProvider || getDefaultPaymentProvider(transaction.paymentMethod),
     promoCode: transaction.promoCode || "",
     paymentProofUrl: transaction.paymentProofUrl,
+    providerPaymentId: transaction.providerPaymentId || "",
+    providerTransactionId: transaction.providerTransactionId || "",
+    providerCheckoutUrl: transaction.providerCheckoutUrl || "",
+    providerStatus: transaction.providerStatus || "",
+    providerPaymentMethod: transaction.providerPaymentMethod || "",
+    providerPaidAt: transaction.providerPaidAt || null,
+    providerVerifiedAt: transaction.providerVerifiedAt || null,
     status: transaction.status,
     adminNote: transaction.adminNote,
     approvedBy: transaction.approvedBy?.toString?.() || null,
@@ -113,19 +124,47 @@ export async function createMemberTransaction(member, packageId, promoCode = "")
     throw new AppError(409, "Paket promo gratis wajib diklaim dengan kode promo.");
   }
 
-  const uniqueCode = createUniquePaymentCode();
-  const transaction = await Transaction.create({
+  if (creditPackage.price <= 0) {
+    throw new AppError(409, "Paket gratis wajib memakai kode promo.");
+  }
+
+  const expiresAt = new Date(Date.now() + TRANSACTION_EXPIRY_MS);
+  const transaction = new Transaction({
     memberId: member._id,
     packageId: creditPackage._id,
     creditAmount: creditPackage.creditAmount,
     baseAmount: creditPackage.price,
-    uniqueCode,
-    totalAmount: calculateTotalAmount(creditPackage.price, uniqueCode),
-    paymentMethod: "manual_transfer",
+    uniqueCode: 0,
+    totalAmount: creditPackage.price,
+    paymentMethod: "mayar",
+    paymentProvider: "mayar",
     promoCode: creditPackage.promoCode || "",
     status: "waiting_payment",
-    expiresAt: new Date(Date.now() + TRANSACTION_EXPIRY_MS)
+    expiresAt
   });
+  const paymentRequest = await createMayarPaymentRequest({
+    name: `Janji Nikah - ${creditPackage.name}`,
+    amount: creditPackage.price,
+    email: member.email,
+    description: `${creditPackage.creditAmount} kredit Janji Nikah`,
+    notes: `Transaksi ${transaction._id.toString()}`,
+    redirectUrl: `${env.appUrl}/app/transactions/${transaction._id.toString()}`,
+    expiredAt: expiresAt.toISOString(),
+    extraData: {
+      app: "janji-nikah",
+      transactionId: transaction._id.toString(),
+      memberId: member._id.toString(),
+      packageId: creditPackage._id.toString(),
+      creditAmount: creditPackage.creditAmount
+    }
+  });
+
+  transaction.providerPaymentId = paymentRequest.id || "";
+  transaction.providerTransactionId = paymentRequest.transactionId || "";
+  transaction.providerCheckoutUrl = paymentRequest.link || "";
+  transaction.providerStatus = "created";
+  transaction.providerPayload = sanitizeProviderPayload(paymentRequest);
+  await transaction.save();
 
   return toPublicTransaction(transaction);
 }
@@ -181,6 +220,7 @@ export async function redeemMemberPromoCode(member, promoCode) {
     uniqueCode: 0,
     totalAmount: 0,
     paymentMethod: "promo_code",
+    paymentProvider: "promo",
     promoCode: normalizedPromoCode,
     status: "success",
     adminNote: `Klaim kode promo ${normalizedPromoCode}.`,
@@ -250,8 +290,12 @@ export async function attachPaymentProof(member, transactionId, paymentProofUrl)
     throw new AppError(404, "Transaksi tidak ditemukan.");
   }
 
+  if (transaction.paymentMethod !== "manual_transfer") {
+    throw new AppError(409, "Upload bukti transfer hanya tersedia untuk transaksi manual.");
+  }
+
   if (transaction.status !== "waiting_payment") {
-    throw new AppError(409, "Bukti pembayaran hanya bisa diunggah untuk transaksi menunggu pembayaran.");
+    throw new AppError(409, "Bukti pembayaran hanya bisa diunggah untuk transaksi manual yang menunggu pembayaran.");
   }
 
   if (transaction.expiresAt <= new Date()) {
@@ -325,8 +369,12 @@ export async function approveTransaction(admin, transactionId, note = "") {
     throw new AppError(404, "Transaksi tidak ditemukan.");
   }
 
+  if (before.paymentMethod !== "manual_transfer") {
+    throw new AppError(409, "Transaksi Mayar diproses otomatis lewat webhook.");
+  }
+
   if (before.status !== "waiting_verification") {
-    throw new AppError(409, "Hanya transaksi menunggu verifikasi yang bisa diapprove.");
+    throw new AppError(409, "Hanya transaksi manual menunggu verifikasi yang bisa diapprove.");
   }
 
   const approvedTransaction = await Transaction.findOneAndUpdate(
@@ -391,8 +439,12 @@ export async function rejectTransaction(admin, transactionId, note = "") {
     throw new AppError(404, "Transaksi tidak ditemukan.");
   }
 
+  if (transaction.paymentMethod !== "manual_transfer") {
+    throw new AppError(409, "Transaksi Mayar diproses otomatis lewat webhook.");
+  }
+
   if (transaction.status !== "waiting_verification") {
-    throw new AppError(409, "Hanya transaksi menunggu verifikasi yang bisa ditolak.");
+    throw new AppError(409, "Hanya transaksi manual menunggu verifikasi yang bisa ditolak.");
   }
 
   const before = transaction.toObject();
@@ -415,6 +467,81 @@ export async function rejectTransaction(admin, transactionId, note = "") {
   return getAdminTransaction(transaction._id);
 }
 
+export async function processMayarWebhook(payload = {}) {
+  const eventType = typeof payload.event === "string" ? payload.event : "";
+
+  if (eventType !== "payment.received") {
+    return { processed: false, reason: "ignored_event" };
+  }
+
+  const providerTransactionId = getMayarWebhookTransactionId(payload);
+
+  if (!providerTransactionId) {
+    return { processed: false, reason: "missing_transaction_id" };
+  }
+
+  const localTransaction = await Transaction.findOne({
+    providerTransactionId,
+    paymentMethod: "mayar"
+  })
+    .select("_id status")
+    .lean();
+
+  if (!localTransaction) {
+    return { processed: false, reason: "unknown_transaction" };
+  }
+
+  if (localTransaction.status === "success") {
+    return { processed: false, reason: "already_success" };
+  }
+
+  const claim = await claimMayarWebhookEvent(providerTransactionId, eventType);
+
+  if (!claim.claimed) {
+    return { processed: false, reason: claim.reason };
+  }
+
+  try {
+    const providerTransaction = await getMayarTransactionDetail(providerTransactionId);
+    const result = await fulfillMayarTransaction(providerTransaction, payload);
+    await completeMayarWebhookEvent(providerTransactionId);
+    return result;
+  } catch (error) {
+    await failMayarWebhookEvent(providerTransactionId, error);
+    throw error;
+  }
+}
+
+export async function refreshMayarTransaction(member, transactionId) {
+  const transaction = await Transaction.findOne({
+    _id: transactionId,
+    memberId: member._id,
+    paymentMethod: "mayar"
+  });
+
+  if (!transaction) {
+    throw new AppError(404, "Transaksi Mayar tidak ditemukan.");
+  }
+
+  if (transaction.status === "success") {
+    return toPublicTransaction(transaction);
+  }
+
+  if (!transaction.providerTransactionId) {
+    throw new AppError(409, "Transaksi Mayar belum memiliki ID pembayaran.");
+  }
+
+  const providerTransaction = await getMayarTransactionDetail(transaction.providerTransactionId);
+
+  if (providerTransaction.status !== "paid") {
+    await updateMayarPendingStatus(transaction, providerTransaction);
+    return toPublicTransaction(transaction);
+  }
+
+  await fulfillMayarTransaction(providerTransaction, { event: "manual.refresh" });
+  return getMemberTransaction(member, transactionId);
+}
+
 function toIdString(value) {
   if (!value) {
     return null;
@@ -429,6 +556,12 @@ function toIdString(value) {
   }
 
   return value;
+}
+
+function getDefaultPaymentProvider(paymentMethod) {
+  if (paymentMethod === "promo_code") return "promo";
+  if (paymentMethod === "mayar") return "mayar";
+  return "manual";
 }
 
 function normalizePromoCode(value) {
@@ -593,4 +726,219 @@ async function getTransactionSummary(match = {}) {
   });
 
   return summary;
+}
+
+function sanitizeProviderPayload(payload = {}) {
+  if (!payload || typeof payload !== "object") {
+    return null;
+  }
+
+  return JSON.parse(JSON.stringify(payload));
+}
+
+function getMayarWebhookTransactionId(payload = {}) {
+  const data = payload.data && typeof payload.data === "object" ? payload.data : {};
+  const candidates = [
+    data.transactionId,
+    data.paymentLinkTransactionId
+  ];
+  const value = candidates.find((candidate) => typeof candidate === "string" && candidate.trim());
+  return value ? value.trim() : "";
+}
+
+async function claimMayarWebhookEvent(providerTransactionId, eventType) {
+  const now = new Date();
+  const lockedUntil = new Date(now.getTime() + WEBHOOK_LEASE_MS);
+  const event = await MayarWebhookEvent.findOneAndUpdate(
+    {
+      providerTransactionId,
+      $or: [
+        { status: "failed" },
+        { status: "processing", lockedUntil: { $lte: now } }
+      ]
+    },
+    {
+      $set: {
+        eventType,
+        status: "processing",
+        lockedUntil,
+        lastError: ""
+      },
+      $inc: {
+        attemptCount: 1
+      },
+      $setOnInsert: {
+        providerTransactionId
+      }
+    },
+    {
+      new: true
+    }
+  );
+
+  if (event) {
+    return { claimed: true };
+  }
+
+  const existing = await MayarWebhookEvent.findOne({ providerTransactionId }).lean();
+
+  if (existing?.status === "completed") {
+    return { claimed: false, reason: "already_completed" };
+  }
+
+  if (existing?.status === "processing" && existing.lockedUntil > now) {
+    return { claimed: false, reason: "already_processing" };
+  }
+
+  try {
+    await MayarWebhookEvent.create({
+      providerTransactionId,
+      eventType,
+      status: "processing",
+      attemptCount: 1,
+      lockedUntil
+    });
+  } catch (error) {
+    if (error?.code === 11000) {
+      return { claimed: false, reason: "already_processing" };
+    }
+
+    throw error;
+  }
+
+  return { claimed: true };
+}
+
+async function completeMayarWebhookEvent(providerTransactionId) {
+  await MayarWebhookEvent.updateOne(
+    { providerTransactionId },
+    {
+      $set: {
+        status: "completed",
+        lockedUntil: null,
+        completedAt: new Date(),
+        lastError: ""
+      }
+    }
+  );
+}
+
+async function failMayarWebhookEvent(providerTransactionId, error) {
+  await MayarWebhookEvent.updateOne(
+    { providerTransactionId },
+    {
+      $set: {
+        status: "failed",
+        lockedUntil: null,
+        lastError: error?.message || "Webhook Mayar gagal diproses."
+      }
+    }
+  );
+}
+
+async function fulfillMayarTransaction(providerTransaction, sourcePayload = {}) {
+  if (!providerTransaction?.id) {
+    throw new AppError(400, "Payload transaksi Mayar tidak valid.");
+  }
+
+  if (providerTransaction.status !== "paid") {
+    return { processed: false, reason: "not_paid" };
+  }
+
+  const before = await Transaction.findOne({
+    providerTransactionId: providerTransaction.id,
+    paymentMethod: "mayar"
+  }).lean();
+
+  if (!before) {
+    throw new AppError(404, "Transaksi lokal untuk pembayaran Mayar tidak ditemukan.");
+  }
+
+  if (before.totalAmount !== providerTransaction.amount) {
+    throw new AppError(409, "Nominal pembayaran Mayar tidak sesuai transaksi lokal.");
+  }
+
+  if (before.status === "success") {
+    return { processed: false, reason: "already_success" };
+  }
+
+  if (before.status !== "waiting_payment") {
+    throw new AppError(409, "Transaksi lokal Mayar sudah tidak bisa diproses.");
+  }
+
+  const providerVerifiedAt = new Date();
+  const approvedTransaction = await Transaction.findOneAndUpdate(
+    {
+      _id: before._id,
+      providerTransactionId: providerTransaction.id,
+      paymentMethod: "mayar",
+      status: "waiting_payment"
+    },
+    {
+      $set: {
+        status: "success",
+        approvedAt: providerVerifiedAt,
+        providerStatus: providerTransaction.status,
+        providerPaymentMethod: providerTransaction.paymentMethod || "",
+        providerPaidAt: providerTransaction.updatedAt ? new Date(providerTransaction.updatedAt) : providerVerifiedAt,
+        providerVerifiedAt,
+        providerPayload: sanitizeProviderPayload({
+          transaction: providerTransaction,
+          webhookEvent: sourcePayload?.event || ""
+        }),
+        adminNote: "Pembayaran Mayar terverifikasi otomatis."
+      }
+    },
+    { new: true }
+  );
+
+  if (!approvedTransaction) {
+    return { processed: false, reason: "already_processed" };
+  }
+
+  const member = await User.findByIdAndUpdate(
+    approvedTransaction.memberId,
+    { $inc: { creditBalance: approvedTransaction.creditAmount } },
+    { new: true }
+  );
+
+  if (!member) {
+    throw new AppError(404, "Member tidak ditemukan.");
+  }
+
+  await CreditLedger.create({
+    memberId: member._id,
+    type: "purchase",
+    amount: approvedTransaction.creditAmount,
+    balanceAfter: member.creditBalance,
+    referenceType: "transaction",
+    referenceId: approvedTransaction._id,
+    note: "Pembelian kredit terverifikasi otomatis oleh Mayar.",
+    createdBy: member._id
+  });
+
+  await AuditLog.create({
+    actorId: null,
+    action: "transaction.mayar_paid",
+    targetType: "Transaction",
+    targetId: approvedTransaction._id,
+    before,
+    after: approvedTransaction.toObject(),
+    note: "Pembayaran Mayar terverifikasi otomatis."
+  });
+
+  return { processed: true, transactionId: approvedTransaction._id.toString() };
+}
+
+async function updateMayarPendingStatus(transaction, providerTransaction) {
+  transaction.providerStatus = providerTransaction.status || transaction.providerStatus;
+  transaction.providerPaymentMethod = providerTransaction.paymentMethod || transaction.providerPaymentMethod;
+  transaction.providerVerifiedAt = new Date();
+  transaction.providerPayload = sanitizeProviderPayload({ transaction: providerTransaction });
+
+  if (providerTransaction.status === "expired") {
+    transaction.status = "expired";
+  }
+
+  await transaction.save();
 }

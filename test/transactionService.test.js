@@ -4,7 +4,12 @@ import test from "node:test";
 import CreditPackage from "../src/models/CreditPackage.js";
 import Transaction from "../src/models/Transaction.js";
 import User from "../src/models/User.js";
-import { listAdminTransactions, listMemberTransactions, toPublicTransaction } from "../src/services/transactionService.js";
+import {
+  listAdminTransactions,
+  listMemberTransactions,
+  processMayarWebhook,
+  toPublicTransaction
+} from "../src/services/transactionService.js";
 
 test("formats transaction for API responses", () => {
   const transaction = toPublicTransaction({
@@ -31,6 +36,54 @@ test("formats transaction for API responses", () => {
   assert.equal(transaction.memberId, "member-id");
   assert.equal(transaction.totalAmount, 25163);
   assert.equal(transaction.status, "waiting_verification");
+});
+
+test("formats Mayar provider fields for API responses", () => {
+  const transaction = toPublicTransaction({
+    _id: { toString: () => "transaction-id" },
+    memberId: { toString: () => "member-id" },
+    packageId: { toString: () => "package-id" },
+    creditAmount: 5,
+    baseAmount: 100000,
+    uniqueCode: 0,
+    totalAmount: 100000,
+    paymentMethod: "mayar",
+    paymentProvider: "mayar",
+    providerPaymentId: "payment-id",
+    providerTransactionId: "provider-transaction-id",
+    providerCheckoutUrl: "https://checkout.example",
+    providerStatus: "created",
+    providerPaymentMethod: "",
+    providerPaidAt: null,
+    providerVerifiedAt: null,
+    paymentProofUrl: "",
+    status: "waiting_payment",
+    adminNote: "",
+    approvedBy: null,
+    approvedAt: null,
+    rejectedBy: null,
+    rejectedAt: null,
+    expiresAt: new Date("2026-07-17T10:00:00.000Z"),
+    createdAt: new Date("2026-07-16T10:00:00.000Z"),
+    updatedAt: new Date("2026-07-16T10:30:00.000Z")
+  });
+
+  assert.equal(transaction.paymentMethod, "mayar");
+  assert.equal(transaction.paymentProvider, "mayar");
+  assert.equal(transaction.providerCheckoutUrl, "https://checkout.example");
+  assert.equal(transaction.providerTransactionId, "provider-transaction-id");
+});
+
+test("ignores Mayar payment webhook without verified transaction id", async () => {
+  const result = await processMayarWebhook({
+    event: "payment.received",
+    data: {
+      id: "webhook-id-only",
+      status: "SUCCESS"
+    }
+  });
+
+  assert.deepEqual(result, { processed: false, reason: "missing_transaction_id" });
 });
 
 test("lists member transactions with pagination and status filter", async () => {

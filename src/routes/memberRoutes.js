@@ -42,6 +42,7 @@ import {
 import {
   memberCreateTransaction,
   memberRedeemPromoCode,
+  memberRefreshMayarTransaction,
   memberTransactionDetail,
   memberTransactions,
   memberUploadPaymentProof
@@ -112,6 +113,7 @@ memberRoutes.post("/transactions", memberCreateTransaction);
 memberRoutes.post("/transactions/promo-code", memberRedeemPromoCode);
 memberRoutes.get("/transactions", memberTransactions);
 memberRoutes.get("/transactions/:id", memberTransactionDetail);
+memberRoutes.post("/transactions/:id/refresh-mayar", memberRefreshMayarTransaction);
 memberRoutes.post(
   "/transactions/:id/payment-proof",
   paymentProofUpload.single("paymentProof"),

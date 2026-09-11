@@ -6,6 +6,9 @@ import User from "../models/User.js";
 import { toPublicInvitation } from "./invitationService.js";
 import { expirePendingTransactions, toPublicTransaction } from "./transactionService.js";
 
+const TRANSACTION_SELECT =
+  "memberId packageId creditAmount baseAmount uniqueCode totalAmount paymentMethod paymentProvider paymentProofUrl providerPaymentId providerTransactionId providerCheckoutUrl providerStatus providerPaymentMethod providerPaidAt providerVerifiedAt status adminNote expiresAt createdAt updatedAt";
+
 export async function getMemberDashboard(user) {
   const memberId = user._id;
 
@@ -44,12 +47,12 @@ export async function getMemberDashboard(user) {
     }),
     Transaction.findOne({ memberId })
       .sort({ createdAt: -1 })
-      .select("memberId packageId creditAmount baseAmount uniqueCode totalAmount paymentProofUrl status adminNote expiresAt createdAt updatedAt")
+      .select(TRANSACTION_SELECT)
       .lean(),
     Transaction.find({ memberId, status: { $in: ["waiting_payment", "waiting_verification"] } })
       .sort({ status: 1, expiresAt: 1, createdAt: -1 })
       .limit(3)
-      .select("memberId packageId creditAmount baseAmount uniqueCode totalAmount paymentProofUrl status adminNote expiresAt createdAt updatedAt")
+      .select(TRANSACTION_SELECT)
       .lean(),
     Transaction.countDocuments({ memberId, status: { $in: ["waiting_payment", "waiting_verification"] } }),
     Invitation.find({ memberId })
@@ -163,7 +166,7 @@ export async function getAdminDashboard() {
       .sort({ status: -1, expiresAt: 1, createdAt: -1 })
       .limit(5)
       .populate("memberId", "name email username")
-      .select("memberId packageId creditAmount baseAmount uniqueCode totalAmount paymentProofUrl status adminNote expiresAt createdAt updatedAt")
+      .select(TRANSACTION_SELECT)
       .lean(),
     getTopPackages(monthStart),
     getTopThemes(monthStart)
