@@ -147,15 +147,15 @@ export async function createMemberTransaction(member, packageId, promoCode = "")
     amount: creditPackage.price,
     email: member.email,
     description: `${creditPackage.creditAmount} kredit Janji Nikah`,
-    notes: `Transaksi ${transaction._id.toString()}`,
-    redirectUrl: `${env.appUrl}/app/transactions/${transaction._id.toString()}`,
+    notes: "Janji Nikah credit",
+    redirectUrl: `${env.appUrl}/app/transactions/${transaction._id.toString()}?payment=mayar`,
     expiredAt: expiresAt.toISOString(),
     extraData: {
       app: "janji-nikah",
       transactionId: transaction._id.toString(),
       memberId: member._id.toString(),
       packageId: creditPackage._id.toString(),
-      creditAmount: creditPackage.creditAmount
+      creditAmount: String(creditPackage.creditAmount)
     }
   });
 

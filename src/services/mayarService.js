@@ -40,6 +40,14 @@ export async function mayarFetch(path, options = {}) {
   const statusCode = body?.statusCode || response.status;
 
   if (!response.ok || statusCode >= 400) {
+    if (env.nodeEnv !== "production") {
+      console.error("Mayar API error response", {
+        statusCode,
+        messages: body?.messages || body?.message,
+        data: body?.data || null
+      });
+    }
+
     throw new MayarApiError(body?.messages || body?.message || `Mayar API error ${response.status}`, statusCode);
   }
 
