@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto";
+import { createHash, timingSafeEqual } from "node:crypto";
 
 import { env } from "../config/env.js";
 import { AppError } from "../utils/AppError.js";
@@ -50,7 +50,10 @@ export function isValidMidtransSignature(payload = {}) {
     grossAmount: payload.gross_amount
   });
 
-  return payload.signature_key === expectedSignature;
+  const actual = Buffer.from(payload.signature_key, "hex");
+  const expected = Buffer.from(expectedSignature, "hex");
+
+  return actual.length === expected.length && timingSafeEqual(actual, expected);
 }
 
 export async function createMidtransSnapTransaction(payload) {

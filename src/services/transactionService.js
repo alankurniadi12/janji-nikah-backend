@@ -523,7 +523,13 @@ export async function processMidtransWebhook(payload = {}) {
   try {
     const providerTransaction = await getMidtransTransactionStatus(providerTransactionId);
     const result = await fulfillMidtransTransaction(providerTransaction, payload);
-    await completeMidtransWebhookEvent(providerTransactionId);
+
+    if (result.processed || result.terminal) {
+      await completeMidtransWebhookEvent(providerTransactionId);
+    } else {
+      await releaseMidtransWebhookEvent(providerTransactionId, result.reason);
+    }
+
     return result;
   } catch (error) {
     await failMidtransWebhookEvent(providerTransactionId, error);
@@ -773,8 +779,13 @@ function normalizeMidtransAmount(value) {
 }
 
 function isSuccessfulMidtransTransaction(providerTransaction = {}) {
+  const statusCode = String(providerTransaction.status_code || "");
   const status = providerTransaction.transaction_status;
   const fraudStatus = providerTransaction.fraud_status;
+
+  if (statusCode !== "200") {
+    return false;
+  }
 
   if (status === "settlement") {
     return true;
@@ -785,6 +796,10 @@ function isSuccessfulMidtransTransaction(providerTransaction = {}) {
   }
 
   return false;
+}
+
+function isTerminalMidtransTransaction(providerTransaction = {}) {
+  return ["expire", "cancel", "deny", "failure"].includes(providerTransaction.transaction_status);
 }
 
 function getMidtransWebhookTransactionId(payload = {}) {
@@ -886,13 +901,22 @@ async function failMidtransWebhookEvent(providerTransactionId, error) {
   );
 }
 
+async function releaseMidtransWebhookEvent(providerTransactionId, reason = "not_final") {
+  await MidtransWebhookEvent.updateOne(
+    { providerTransactionId },
+    {
+      $set: {
+        status: "failed",
+        lockedUntil: null,
+        lastError: `Status pembayaran Midtrans belum final: ${reason || "not_final"}`
+      }
+    }
+  );
+}
+
 async function fulfillMidtransTransaction(providerTransaction, sourcePayload = {}) {
   if (!providerTransaction?.order_id) {
     throw new AppError(400, "Payload transaksi Midtrans tidak valid.");
-  }
-
-  if (!isSuccessfulMidtransTransaction(providerTransaction)) {
-    return { processed: false, reason: "not_paid" };
   }
 
   const before = await Transaction.findOne({
@@ -909,7 +933,21 @@ async function fulfillMidtransTransaction(providerTransaction, sourcePayload = {
   }
 
   if (before.status === "success") {
-    return { processed: false, reason: "already_success" };
+    return { processed: false, reason: "already_success", terminal: true };
+  }
+
+  if (!isSuccessfulMidtransTransaction(providerTransaction)) {
+    const pendingTransaction = await Transaction.findById(before._id);
+
+    if (pendingTransaction) {
+      await updateMidtransPendingStatus(pendingTransaction, providerTransaction);
+    }
+
+    return {
+      processed: false,
+      reason: providerTransaction.transaction_status || "not_paid",
+      terminal: isTerminalMidtransTransaction(providerTransaction)
+    };
   }
 
   if (before.status !== "waiting_payment") {
