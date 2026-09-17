@@ -9,7 +9,8 @@ import { AppError } from "../utils/AppError.js";
 import {
   createMidtransSnapTransaction,
   getMidtransTransactionStatus,
-  isValidMidtransSignature
+  isValidMidtransSignature,
+  MidtransApiError
 } from "./midtransService.js";
 import { buildActivePackageQuery, expireElapsedCreditPackages } from "./creditPackageService.js";
 
@@ -556,7 +557,26 @@ export async function refreshMidtransTransaction(member, transactionId) {
     throw new AppError(409, "Transaksi Midtrans belum memiliki ID pembayaran.");
   }
 
-  const providerTransaction = await getMidtransTransactionStatus(transaction.providerTransactionId);
+  let providerTransaction;
+
+  try {
+    providerTransaction = await getMidtransTransactionStatus(transaction.providerTransactionId);
+  } catch (error) {
+    if (isMissingMidtransChargeError(error)) {
+      transaction.providerVerifiedAt = new Date();
+      transaction.providerPayload = sanitizeProviderPayload({
+        transaction: {
+          order_id: transaction.providerTransactionId,
+          transaction_status: "created",
+          status_message: error.message
+        }
+      });
+      await transaction.save();
+      return toPublicTransaction(transaction);
+    }
+
+    throw error;
+  }
 
   if (!isSuccessfulMidtransTransaction(providerTransaction)) {
     await updateMidtransPendingStatus(transaction, providerTransaction);
@@ -800,6 +820,10 @@ function isSuccessfulMidtransTransaction(providerTransaction = {}) {
 
 function isTerminalMidtransTransaction(providerTransaction = {}) {
   return ["expire", "cancel", "deny", "failure"].includes(providerTransaction.transaction_status);
+}
+
+function isMissingMidtransChargeError(error) {
+  return error instanceof MidtransApiError && error.statusCode === 404;
 }
 
 function getMidtransWebhookTransactionId(payload = {}) {
