@@ -25,9 +25,9 @@ export function normalizeError(error) {
     });
   }
 
-  if (error.name === "MayarApiError") {
+  if (error.name === "MidtransApiError") {
     const statusCode = error.statusCode >= 400 && error.statusCode < 500 ? 502 : 503;
-    return new AppError(statusCode, `Mayar belum bisa memproses pembayaran: ${error.message}`);
+    return new AppError(statusCode, `Midtrans belum bisa memproses pembayaran: ${error.message}`);
   }
 
   if (error.code === 11000) {

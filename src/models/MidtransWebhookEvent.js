@@ -2,7 +2,7 @@ import mongoose from "mongoose";
 
 const { Schema } = mongoose;
 
-const mayarWebhookEventSchema = new Schema(
+const midtransWebhookEventSchema = new Schema(
   {
     providerTransactionId: {
       type: String,
@@ -46,6 +46,6 @@ const mayarWebhookEventSchema = new Schema(
   }
 );
 
-const MayarWebhookEvent = mongoose.model("MayarWebhookEvent", mayarWebhookEventSchema);
+const MidtransWebhookEvent = mongoose.model("MidtransWebhookEvent", midtransWebhookEventSchema);
 
-export default MayarWebhookEvent;
+export default MidtransWebhookEvent;

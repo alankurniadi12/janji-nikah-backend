@@ -7,7 +7,7 @@ import User from "../src/models/User.js";
 import {
   listAdminTransactions,
   listMemberTransactions,
-  processMayarWebhook,
+  processMidtransWebhook,
   toPublicTransaction
 } from "../src/services/transactionService.js";
 
@@ -38,7 +38,7 @@ test("formats transaction for API responses", () => {
   assert.equal(transaction.status, "waiting_verification");
 });
 
-test("formats Mayar provider fields for API responses", () => {
+test("formats Midtrans provider fields for API responses", () => {
   const transaction = toPublicTransaction({
     _id: { toString: () => "transaction-id" },
     memberId: { toString: () => "member-id" },
@@ -47,8 +47,8 @@ test("formats Mayar provider fields for API responses", () => {
     baseAmount: 100000,
     uniqueCode: 0,
     totalAmount: 100000,
-    paymentMethod: "mayar",
-    paymentProvider: "mayar",
+    paymentMethod: "midtrans",
+    paymentProvider: "midtrans",
     providerPaymentId: "payment-id",
     providerTransactionId: "provider-transaction-id",
     providerCheckoutUrl: "https://checkout.example",
@@ -68,19 +68,17 @@ test("formats Mayar provider fields for API responses", () => {
     updatedAt: new Date("2026-07-16T10:30:00.000Z")
   });
 
-  assert.equal(transaction.paymentMethod, "mayar");
-  assert.equal(transaction.paymentProvider, "mayar");
+  assert.equal(transaction.paymentMethod, "midtrans");
+  assert.equal(transaction.paymentProvider, "midtrans");
   assert.equal(transaction.providerCheckoutUrl, "https://checkout.example");
   assert.equal(transaction.providerTransactionId, "provider-transaction-id");
 });
 
-test("ignores Mayar payment webhook without verified transaction id", async () => {
-  const result = await processMayarWebhook({
-    event: "payment.received",
-    data: {
-      id: "webhook-id-only",
-      status: "SUCCESS"
-    }
+test("ignores Midtrans payment webhook without verified transaction id", async () => {
+  const result = await processMidtransWebhook({
+    transaction_status: "settlement",
+    status_code: "200",
+    gross_amount: "25000.00"
   });
 
   assert.deepEqual(result, { processed: false, reason: "missing_transaction_id" });

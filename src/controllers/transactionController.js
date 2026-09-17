@@ -6,9 +6,9 @@ import {
   getMemberTransaction,
   listAdminTransactions,
   listMemberTransactions,
-  processMayarWebhook,
+  processMidtransWebhook,
   redeemMemberPromoCode,
-  refreshMayarTransaction,
+  refreshMidtransTransaction,
   rejectTransaction
 } from "../services/transactionService.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
@@ -56,8 +56,8 @@ export const memberTransactionDetail = asyncHandler(async (req, res) => {
   });
 });
 
-export const memberRefreshMayarTransaction = asyncHandler(async (req, res) => {
-  const transaction = await refreshMayarTransaction(req.user, req.params.id);
+export const memberRefreshMidtransTransaction = asyncHandler(async (req, res) => {
+  const transaction = await refreshMidtransTransaction(req.user, req.params.id);
 
   res.json({
     success: true,
@@ -128,8 +128,8 @@ export const adminRejectTransaction = asyncHandler(async (req, res) => {
   });
 });
 
-export const mayarWebhook = asyncHandler(async (req, res) => {
-  const result = await processMayarWebhook(req.body);
+export const midtransWebhook = asyncHandler(async (req, res) => {
+  const result = await processMidtransWebhook(req.body);
 
   res.json({
     success: true,

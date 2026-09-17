@@ -33,14 +33,14 @@ const transactionSchema = new Schema(
     },
     paymentMethod: {
       type: String,
-      enum: ["manual_transfer", "promo_code", "mayar"],
+      enum: ["manual_transfer", "promo_code", "midtrans", "mayar"],
       default: "manual_transfer",
       required: true,
       index: true
     },
     paymentProvider: {
       type: String,
-      enum: ["manual", "promo", "mayar"],
+      enum: ["manual", "promo", "midtrans", "mayar"],
       default: "manual",
       required: true,
       index: true

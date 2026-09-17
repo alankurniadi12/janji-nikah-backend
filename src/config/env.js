@@ -56,8 +56,9 @@ function readEnv() {
     imageMaxWidth: toInteger(process.env.IMAGE_MAX_WIDTH, 1600),
     imageQuality: toInteger(process.env.IMAGE_QUALITY, 85),
     cleanupIntervalMs: toInteger(process.env.CLEANUP_INTERVAL_MS, 6 * 60 * 60 * 1000),
-    mayarApiKey: process.env.MAYAR_API_KEY || "",
-    mayarEnv: process.env.MAYAR_ENV === "production" ? "production" : "sandbox",
+    midtransServerKey: process.env.MIDTRANS_SERVER_KEY || "",
+    midtransClientKey: process.env.MIDTRANS_CLIENT_KEY || "",
+    midtransEnv: process.env.MIDTRANS_ENV === "production" ? "production" : "sandbox",
     adminEmail: process.env.ADMIN_EMAIL || "",
     adminName: process.env.ADMIN_NAME || "Admin Janji Nikah"
   };

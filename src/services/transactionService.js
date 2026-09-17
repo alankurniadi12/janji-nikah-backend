@@ -1,12 +1,16 @@
 import AuditLog from "../models/AuditLog.js";
 import CreditLedger from "../models/CreditLedger.js";
 import CreditPackage from "../models/CreditPackage.js";
-import MayarWebhookEvent from "../models/MayarWebhookEvent.js";
+import MidtransWebhookEvent from "../models/MidtransWebhookEvent.js";
 import Transaction from "../models/Transaction.js";
 import User from "../models/User.js";
 import { env } from "../config/env.js";
 import { AppError } from "../utils/AppError.js";
-import { createMayarPaymentRequest, getMayarTransactionDetail } from "./mayarService.js";
+import {
+  createMidtransSnapTransaction,
+  getMidtransTransactionStatus,
+  isValidMidtransSignature
+} from "./midtransService.js";
 import { buildActivePackageQuery, expireElapsedCreditPackages } from "./creditPackageService.js";
 
 const TRANSACTION_EXPIRY_MS = 24 * 60 * 60 * 1000;
@@ -136,32 +140,48 @@ export async function createMemberTransaction(member, packageId, promoCode = "")
     baseAmount: creditPackage.price,
     uniqueCode: 0,
     totalAmount: creditPackage.price,
-    paymentMethod: "mayar",
-    paymentProvider: "mayar",
+    paymentMethod: "midtrans",
+    paymentProvider: "midtrans",
     promoCode: creditPackage.promoCode || "",
     status: "waiting_payment",
     expiresAt
   });
-  const paymentRequest = await createMayarPaymentRequest({
-    name: `Janji Nikah - ${creditPackage.name}`,
-    amount: creditPackage.price,
-    email: member.email,
-    description: `${creditPackage.creditAmount} kredit Janji Nikah`,
-    notes: "Janji Nikah credit",
-    redirectUrl: `${env.appUrl}/app/transactions/${transaction._id.toString()}?payment=mayar`,
-    expiredAt: expiresAt.toISOString(),
-    extraData: {
-      app: "janji-nikah",
-      transactionId: transaction._id.toString(),
-      memberId: member._id.toString(),
-      packageId: creditPackage._id.toString(),
-      creditAmount: String(creditPackage.creditAmount)
-    }
+  const orderId = transaction._id.toString();
+  const paymentRequest = await createMidtransSnapTransaction({
+    transaction_details: {
+      order_id: orderId,
+      gross_amount: creditPackage.price
+    },
+    item_details: [
+      {
+        id: creditPackage._id.toString(),
+        price: creditPackage.price,
+        quantity: 1,
+        name: `${creditPackage.creditAmount} kredit Janji Nikah`,
+        brand: "Janji Nikah",
+        category: "Kredit"
+      }
+    ],
+    customer_details: {
+      first_name: member.name || member.email,
+      email: member.email
+    },
+    callbacks: {
+      finish: `${env.appUrl}/app/transactions/${transaction._id.toString()}?payment=midtrans`
+    },
+    expiry: {
+      start_time: formatMidtransDate(new Date()),
+      unit: "hour",
+      duration: 24
+    },
+    custom_field1: transaction._id.toString(),
+    custom_field2: member._id.toString(),
+    custom_field3: creditPackage._id.toString()
   });
 
-  transaction.providerPaymentId = paymentRequest.id || "";
-  transaction.providerTransactionId = paymentRequest.transactionId || "";
-  transaction.providerCheckoutUrl = paymentRequest.link || "";
+  transaction.providerPaymentId = paymentRequest.token || "";
+  transaction.providerTransactionId = orderId;
+  transaction.providerCheckoutUrl = paymentRequest.redirectUrl || "";
   transaction.providerStatus = "created";
   transaction.providerPayload = sanitizeProviderPayload(paymentRequest);
   await transaction.save();
@@ -370,7 +390,7 @@ export async function approveTransaction(admin, transactionId, note = "") {
   }
 
   if (before.paymentMethod !== "manual_transfer") {
-    throw new AppError(409, "Transaksi Mayar diproses otomatis lewat webhook.");
+    throw new AppError(409, "Transaksi Midtrans diproses otomatis lewat webhook.");
   }
 
   if (before.status !== "waiting_verification") {
@@ -440,7 +460,7 @@ export async function rejectTransaction(admin, transactionId, note = "") {
   }
 
   if (transaction.paymentMethod !== "manual_transfer") {
-    throw new AppError(409, "Transaksi Mayar diproses otomatis lewat webhook.");
+    throw new AppError(409, "Transaksi Midtrans diproses otomatis lewat webhook.");
   }
 
   if (transaction.status !== "waiting_verification") {
@@ -467,22 +487,20 @@ export async function rejectTransaction(admin, transactionId, note = "") {
   return getAdminTransaction(transaction._id);
 }
 
-export async function processMayarWebhook(payload = {}) {
-  const eventType = typeof payload.event === "string" ? payload.event : "";
-
-  if (eventType !== "payment.received") {
-    return { processed: false, reason: "ignored_event" };
-  }
-
-  const providerTransactionId = getMayarWebhookTransactionId(payload);
+export async function processMidtransWebhook(payload = {}) {
+  const providerTransactionId = getMidtransWebhookTransactionId(payload);
 
   if (!providerTransactionId) {
     return { processed: false, reason: "missing_transaction_id" };
   }
 
+  if (!isValidMidtransSignature(payload)) {
+    return { processed: false, reason: "invalid_signature" };
+  }
+
   const localTransaction = await Transaction.findOne({
     providerTransactionId,
-    paymentMethod: "mayar"
+    paymentMethod: "midtrans"
   })
     .select("_id status")
     .lean();
@@ -495,32 +513,33 @@ export async function processMayarWebhook(payload = {}) {
     return { processed: false, reason: "already_success" };
   }
 
-  const claim = await claimMayarWebhookEvent(providerTransactionId, eventType);
+  const eventType = `${payload.transaction_status || "unknown"}:${payload.status_code || "unknown"}`;
+  const claim = await claimMidtransWebhookEvent(providerTransactionId, eventType);
 
   if (!claim.claimed) {
     return { processed: false, reason: claim.reason };
   }
 
   try {
-    const providerTransaction = await getMayarTransactionDetail(providerTransactionId);
-    const result = await fulfillMayarTransaction(providerTransaction, payload);
-    await completeMayarWebhookEvent(providerTransactionId);
+    const providerTransaction = await getMidtransTransactionStatus(providerTransactionId);
+    const result = await fulfillMidtransTransaction(providerTransaction, payload);
+    await completeMidtransWebhookEvent(providerTransactionId);
     return result;
   } catch (error) {
-    await failMayarWebhookEvent(providerTransactionId, error);
+    await failMidtransWebhookEvent(providerTransactionId, error);
     throw error;
   }
 }
 
-export async function refreshMayarTransaction(member, transactionId) {
+export async function refreshMidtransTransaction(member, transactionId) {
   const transaction = await Transaction.findOne({
     _id: transactionId,
     memberId: member._id,
-    paymentMethod: "mayar"
+    paymentMethod: "midtrans"
   });
 
   if (!transaction) {
-    throw new AppError(404, "Transaksi Mayar tidak ditemukan.");
+    throw new AppError(404, "Transaksi Midtrans tidak ditemukan.");
   }
 
   if (transaction.status === "success") {
@@ -528,17 +547,17 @@ export async function refreshMayarTransaction(member, transactionId) {
   }
 
   if (!transaction.providerTransactionId) {
-    throw new AppError(409, "Transaksi Mayar belum memiliki ID pembayaran.");
+    throw new AppError(409, "Transaksi Midtrans belum memiliki ID pembayaran.");
   }
 
-  const providerTransaction = await getMayarTransactionDetail(transaction.providerTransactionId);
+  const providerTransaction = await getMidtransTransactionStatus(transaction.providerTransactionId);
 
-  if (providerTransaction.status !== "paid") {
-    await updateMayarPendingStatus(transaction, providerTransaction);
+  if (!isSuccessfulMidtransTransaction(providerTransaction)) {
+    await updateMidtransPendingStatus(transaction, providerTransaction);
     return toPublicTransaction(transaction);
   }
 
-  await fulfillMayarTransaction(providerTransaction, { event: "manual.refresh" });
+  await fulfillMidtransTransaction(providerTransaction, { event: "manual.refresh" });
   return getMemberTransaction(member, transactionId);
 }
 
@@ -560,6 +579,7 @@ function toIdString(value) {
 
 function getDefaultPaymentProvider(paymentMethod) {
   if (paymentMethod === "promo_code") return "promo";
+  if (paymentMethod === "midtrans") return "midtrans";
   if (paymentMethod === "mayar") return "mayar";
   return "manual";
 }
@@ -736,20 +756,50 @@ function sanitizeProviderPayload(payload = {}) {
   return JSON.parse(JSON.stringify(payload));
 }
 
-function getMayarWebhookTransactionId(payload = {}) {
-  const data = payload.data && typeof payload.data === "object" ? payload.data : {};
+function formatMidtransDate(date) {
+  const pad = (value) => String(value).padStart(2, "0");
+  const year = date.getFullYear();
+  const month = pad(date.getMonth() + 1);
+  const day = pad(date.getDate());
+  const hour = pad(date.getHours());
+  const minute = pad(date.getMinutes());
+  const second = pad(date.getSeconds());
+  return `${year}-${month}-${day} ${hour}:${minute}:${second} +0700`;
+}
+
+function normalizeMidtransAmount(value) {
+  const amount = Number(value);
+  return Number.isFinite(amount) ? Math.round(amount) : 0;
+}
+
+function isSuccessfulMidtransTransaction(providerTransaction = {}) {
+  const status = providerTransaction.transaction_status;
+  const fraudStatus = providerTransaction.fraud_status;
+
+  if (status === "settlement") {
+    return true;
+  }
+
+  if (status === "capture") {
+    return !fraudStatus || fraudStatus === "accept";
+  }
+
+  return false;
+}
+
+function getMidtransWebhookTransactionId(payload = {}) {
   const candidates = [
-    data.transactionId,
-    data.paymentLinkTransactionId
+    payload.order_id,
+    payload.transaction_id
   ];
   const value = candidates.find((candidate) => typeof candidate === "string" && candidate.trim());
   return value ? value.trim() : "";
 }
 
-async function claimMayarWebhookEvent(providerTransactionId, eventType) {
+async function claimMidtransWebhookEvent(providerTransactionId, eventType) {
   const now = new Date();
   const lockedUntil = new Date(now.getTime() + WEBHOOK_LEASE_MS);
-  const event = await MayarWebhookEvent.findOneAndUpdate(
+  const event = await MidtransWebhookEvent.findOneAndUpdate(
     {
       providerTransactionId,
       $or: [
@@ -780,7 +830,7 @@ async function claimMayarWebhookEvent(providerTransactionId, eventType) {
     return { claimed: true };
   }
 
-  const existing = await MayarWebhookEvent.findOne({ providerTransactionId }).lean();
+  const existing = await MidtransWebhookEvent.findOne({ providerTransactionId }).lean();
 
   if (existing?.status === "completed") {
     return { claimed: false, reason: "already_completed" };
@@ -791,7 +841,7 @@ async function claimMayarWebhookEvent(providerTransactionId, eventType) {
   }
 
   try {
-    await MayarWebhookEvent.create({
+    await MidtransWebhookEvent.create({
       providerTransactionId,
       eventType,
       status: "processing",
@@ -809,8 +859,8 @@ async function claimMayarWebhookEvent(providerTransactionId, eventType) {
   return { claimed: true };
 }
 
-async function completeMayarWebhookEvent(providerTransactionId) {
-  await MayarWebhookEvent.updateOne(
+async function completeMidtransWebhookEvent(providerTransactionId) {
+  await MidtransWebhookEvent.updateOne(
     { providerTransactionId },
     {
       $set: {
@@ -823,39 +873,39 @@ async function completeMayarWebhookEvent(providerTransactionId) {
   );
 }
 
-async function failMayarWebhookEvent(providerTransactionId, error) {
-  await MayarWebhookEvent.updateOne(
+async function failMidtransWebhookEvent(providerTransactionId, error) {
+  await MidtransWebhookEvent.updateOne(
     { providerTransactionId },
     {
       $set: {
         status: "failed",
         lockedUntil: null,
-        lastError: error?.message || "Webhook Mayar gagal diproses."
+        lastError: error?.message || "Webhook Midtrans gagal diproses."
       }
     }
   );
 }
 
-async function fulfillMayarTransaction(providerTransaction, sourcePayload = {}) {
-  if (!providerTransaction?.id) {
-    throw new AppError(400, "Payload transaksi Mayar tidak valid.");
+async function fulfillMidtransTransaction(providerTransaction, sourcePayload = {}) {
+  if (!providerTransaction?.order_id) {
+    throw new AppError(400, "Payload transaksi Midtrans tidak valid.");
   }
 
-  if (providerTransaction.status !== "paid") {
+  if (!isSuccessfulMidtransTransaction(providerTransaction)) {
     return { processed: false, reason: "not_paid" };
   }
 
   const before = await Transaction.findOne({
-    providerTransactionId: providerTransaction.id,
-    paymentMethod: "mayar"
+    providerTransactionId: providerTransaction.order_id,
+    paymentMethod: "midtrans"
   }).lean();
 
   if (!before) {
-    throw new AppError(404, "Transaksi lokal untuk pembayaran Mayar tidak ditemukan.");
+    throw new AppError(404, "Transaksi lokal untuk pembayaran Midtrans tidak ditemukan.");
   }
 
-  if (before.totalAmount !== providerTransaction.amount) {
-    throw new AppError(409, "Nominal pembayaran Mayar tidak sesuai transaksi lokal.");
+  if (before.totalAmount !== normalizeMidtransAmount(providerTransaction.gross_amount)) {
+    throw new AppError(409, "Nominal pembayaran Midtrans tidak sesuai transaksi lokal.");
   }
 
   if (before.status === "success") {
@@ -863,30 +913,33 @@ async function fulfillMayarTransaction(providerTransaction, sourcePayload = {}) 
   }
 
   if (before.status !== "waiting_payment") {
-    throw new AppError(409, "Transaksi lokal Mayar sudah tidak bisa diproses.");
+    throw new AppError(409, "Transaksi lokal Midtrans sudah tidak bisa diproses.");
   }
 
   const providerVerifiedAt = new Date();
   const approvedTransaction = await Transaction.findOneAndUpdate(
     {
       _id: before._id,
-      providerTransactionId: providerTransaction.id,
-      paymentMethod: "mayar",
+      providerTransactionId: providerTransaction.order_id,
+      paymentMethod: "midtrans",
       status: "waiting_payment"
     },
     {
       $set: {
         status: "success",
         approvedAt: providerVerifiedAt,
-        providerStatus: providerTransaction.status,
-        providerPaymentMethod: providerTransaction.paymentMethod || "",
-        providerPaidAt: providerTransaction.updatedAt ? new Date(providerTransaction.updatedAt) : providerVerifiedAt,
+        providerPaymentId: providerTransaction.transaction_id || "",
+        providerStatus: providerTransaction.transaction_status,
+        providerPaymentMethod: providerTransaction.payment_type || "",
+        providerPaidAt: providerTransaction.settlement_time
+          ? new Date(providerTransaction.settlement_time)
+          : providerVerifiedAt,
         providerVerifiedAt,
         providerPayload: sanitizeProviderPayload({
           transaction: providerTransaction,
-          webhookEvent: sourcePayload?.event || ""
+          webhookEvent: sourcePayload?.transaction_status || sourcePayload?.event || ""
         }),
-        adminNote: "Pembayaran Mayar terverifikasi otomatis."
+        adminNote: "Pembayaran Midtrans terverifikasi otomatis."
       }
     },
     { new: true }
@@ -913,30 +966,31 @@ async function fulfillMayarTransaction(providerTransaction, sourcePayload = {}) 
     balanceAfter: member.creditBalance,
     referenceType: "transaction",
     referenceId: approvedTransaction._id,
-    note: "Pembelian kredit terverifikasi otomatis oleh Mayar.",
+    note: "Pembelian kredit terverifikasi otomatis oleh Midtrans.",
     createdBy: member._id
   });
 
   await AuditLog.create({
     actorId: null,
-    action: "transaction.mayar_paid",
+    action: "transaction.midtrans_paid",
     targetType: "Transaction",
     targetId: approvedTransaction._id,
     before,
     after: approvedTransaction.toObject(),
-    note: "Pembayaran Mayar terverifikasi otomatis."
+    note: "Pembayaran Midtrans terverifikasi otomatis."
   });
 
   return { processed: true, transactionId: approvedTransaction._id.toString() };
 }
 
-async function updateMayarPendingStatus(transaction, providerTransaction) {
-  transaction.providerStatus = providerTransaction.status || transaction.providerStatus;
-  transaction.providerPaymentMethod = providerTransaction.paymentMethod || transaction.providerPaymentMethod;
+async function updateMidtransPendingStatus(transaction, providerTransaction) {
+  transaction.providerPaymentId = providerTransaction.transaction_id || transaction.providerPaymentId;
+  transaction.providerStatus = providerTransaction.transaction_status || transaction.providerStatus;
+  transaction.providerPaymentMethod = providerTransaction.payment_type || transaction.providerPaymentMethod;
   transaction.providerVerifiedAt = new Date();
   transaction.providerPayload = sanitizeProviderPayload({ transaction: providerTransaction });
 
-  if (providerTransaction.status === "expired") {
+  if (["expire", "cancel", "deny", "failure"].includes(providerTransaction.transaction_status)) {
     transaction.status = "expired";
   }
 
