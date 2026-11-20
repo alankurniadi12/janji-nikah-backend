@@ -8,6 +8,8 @@ import Wish from "../models/Wish.js";
 import { AppError } from "../utils/AppError.js";
 import { sanitizeGuestText } from "../utils/sanitizeText.js";
 
+export const MAX_GUESTS_PER_INVITATION = 500;
+
 export function toPublicGuest(guest, invitation = null, member = null) {
   return {
     id: guest._id.toString(),
@@ -64,11 +66,16 @@ export async function createInvitationGuest(member, invitationId, payload) {
     throw new AppError(400, "Nama tamu wajib diisi.");
   }
 
-  const guest = await Guest.create({
-    invitationId: invitation._id,
-    name,
-    token: await createUniqueGuestToken()
-  });
+  const token = await createUniqueGuestToken();
+  await reserveGuestSlots(invitation._id, 1);
+  let guest;
+
+  try {
+    guest = await Guest.create({ invitationId: invitation._id, name, token });
+  } catch (error) {
+    await releaseGuestSlots(invitation._id, 1);
+    throw error;
+  }
 
   return toPublicGuest(guest, invitation, member);
 }
@@ -81,15 +88,22 @@ export async function bulkCreateInvitationGuests(member, invitationId, payload) 
     throw new AppError(400, "Daftar nama tamu wajib diisi.");
   }
 
+  await reserveGuestSlots(invitation._id, names.length);
+
   const guests = [];
 
-  for (const name of names) {
-    const guest = await Guest.create({
-      invitationId: invitation._id,
-      name,
-      token: await createUniqueGuestToken()
-    });
-    guests.push(toPublicGuest(guest, invitation, member));
+  try {
+    for (const name of names) {
+      const guest = await Guest.create({
+        invitationId: invitation._id,
+        name,
+        token: await createUniqueGuestToken()
+      });
+      guests.push(toPublicGuest(guest, invitation, member));
+    }
+  } catch (error) {
+    await releaseGuestSlots(invitation._id, names.length - guests.length);
+    throw error;
   }
 
   return guests;
@@ -123,10 +137,17 @@ export async function deleteInvitationGuest(member, invitationId, guestId) {
     throw new AppError(404, "Tamu tidak ditemukan.");
   }
 
+  await ensureGuestCount(invitationId);
+  const deleted = await Guest.deleteOne({ _id: guestId, invitationId });
+
+  if (!deleted.deletedCount) {
+    throw new AppError(404, "Tamu tidak ditemukan.");
+  }
+
+  await releaseGuestSlots(invitationId, 1);
   await Promise.all([
     RSVP.deleteOne({ guestId: guest._id }),
-    Wish.updateMany({ guestId: guest._id }, { $set: { deletedAt: new Date() } }),
-    guest.deleteOne()
+    Wish.updateMany({ guestId: guest._id }, { $set: { deletedAt: new Date() } })
   ]);
 }
 
@@ -218,4 +239,34 @@ async function createUniqueGuestToken() {
 function parseBulkGuestNames(names) {
   const rawNames = Array.isArray(names) ? names : String(names || "").split(/\r?\n/);
   return [...new Set(rawNames.map((name) => sanitizeGuestText(name, 100)).filter(Boolean))];
+}
+
+async function ensureGuestCount(invitationId) {
+  const count = await Guest.countDocuments({ invitationId });
+  await Invitation.updateOne(
+    { _id: invitationId, guestCount: { $exists: false } },
+    { $set: { guestCount: count } }
+  );
+}
+
+async function reserveGuestSlots(invitationId, amount) {
+  if (amount > MAX_GUESTS_PER_INVITATION) {
+    throw new AppError(409, `Maksimal ${MAX_GUESTS_PER_INVITATION} tamu per undangan. Kurangi jumlah nama yang ditambahkan.`);
+  }
+
+  await ensureGuestCount(invitationId);
+  const invitation = await Invitation.findOneAndUpdate(
+    { _id: invitationId, guestCount: { $lte: MAX_GUESTS_PER_INVITATION - amount } },
+    { $inc: { guestCount: amount } }
+  );
+
+  if (!invitation) {
+    throw new AppError(409, `Batas ${MAX_GUESTS_PER_INVITATION} tamu per undangan sudah tercapai. Hapus tamu yang tidak diperlukan sebelum menambah lagi.`);
+  }
+}
+
+async function releaseGuestSlots(invitationId, amount) {
+  if (amount > 0) {
+    await Invitation.updateOne({ _id: invitationId }, { $inc: { guestCount: -amount } });
+  }
 }

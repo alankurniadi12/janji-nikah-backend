@@ -136,6 +136,10 @@ const invitationSchema = new Schema(
       default: 0,
       min: 0
     },
+    guestCount: {
+      type: Number,
+      min: 0
+    },
     groom: {
       fullName: { type: String, default: "" },
       nickname: { type: String, default: "" },

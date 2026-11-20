@@ -14,6 +14,9 @@ function mockHostLookup(t, invitation) {
     }
     return Promise.resolve(invitation);
   });
+  t.mock.method(Guest, "countDocuments", async () => 0);
+  t.mock.method(Invitation, "updateOne", async () => ({ modifiedCount: 1 }));
+  t.mock.method(Invitation, "findOneAndUpdate", async () => invitation);
 }
 
 test("host link adds a guest and returns only the personal link", async (t) => {
