@@ -1,4 +1,4 @@
-import { getPublicHostDashboard } from "../services/publicHostService.js";
+import { addPublicHostGuest, getPublicHostDashboard } from "../services/publicHostService.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 
 export const publicHostDashboard = asyncHandler(async (req, res) => {
@@ -7,5 +7,14 @@ export const publicHostDashboard = asyncHandler(async (req, res) => {
   res.json({
     success: true,
     data
+  });
+});
+
+export const publicHostAddGuest = asyncHandler(async (req, res) => {
+  const guest = await addPublicHostGuest(req.params.username, req.params.slug, req.params.token, req.body);
+
+  res.status(201).json({
+    success: true,
+    data: { guest }
   });
 });

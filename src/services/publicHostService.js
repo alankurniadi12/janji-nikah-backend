@@ -4,41 +4,13 @@ import RSVP from "../models/RSVP.js";
 import User from "../models/User.js";
 import Wish from "../models/Wish.js";
 import { AppError } from "../utils/AppError.js";
-import { toPublicGuest, toPublicRsvp, toPublicWish } from "./guestService.js";
+import { createInvitationGuest, toPublicGuest, toPublicRsvp, toPublicWish } from "./guestService.js";
 import { lockInvitationIfNeeded, toPublicInvitation } from "./invitationService.js";
 
 export async function getPublicHostDashboard(username, slug, token) {
-  const member = await User.findOne({
-    $or: [{ username }, { usernameHistory: username }],
-    role: "member"
-  }).lean();
+  const { member, invitation, redirectUsername } = await findHostInvitation(username, slug, token);
 
-  if (!member) {
-    throw new AppError(404, "Laporan undangan tidak ditemukan.");
-  }
-
-  const redirectUsername = member.username !== username ? member.username : null;
-  let invitation = await Invitation.findOne({
-    memberId: member._id,
-    slug
-  })
-    .select("+hostAccessToken")
-    .lean();
-
-  if (!invitation || !invitation.hostAccessToken || invitation.hostAccessToken !== token) {
-    throw new AppError(404, "Laporan undangan tidak ditemukan.");
-  }
-
-  if (shouldLockInvitation(invitation)) {
-    await lockInvitationIfNeeded(invitation._id);
-    invitation = {
-      ...invitation,
-      status: "locked",
-      lockedAt: new Date()
-    };
-  }
-
-  if (!["active", "locked"].includes(invitation.status) || isInvitationExpired(invitation)) {
+  if (!isHostInvitationActive(invitation)) {
     return {
       isActive: false,
       reason: "expired",
@@ -80,6 +52,56 @@ export async function getPublicHostDashboard(username, slug, token) {
     guests: guestsWithRsvp,
     wishes: wishes.map(toPublicWish)
   };
+}
+
+export async function addPublicHostGuest(username, slug, token, payload) {
+  const { member, invitation } = await findHostInvitation(username, slug, token);
+
+  if (!isHostInvitationActive(invitation)) {
+    throw new AppError(410, "Masa aktif undangan sudah berakhir. Tamu tidak dapat ditambahkan.");
+  }
+
+  const guest = await createInvitationGuest(member, invitation._id, payload);
+  delete guest.token;
+  return guest;
+}
+
+async function findHostInvitation(username, slug, token) {
+  const member = await User.findOne({
+    $or: [{ username }, { usernameHistory: username }],
+    role: "member"
+  }).lean();
+
+  if (!member) {
+    throw new AppError(404, "Laporan undangan tidak ditemukan.");
+  }
+
+  const redirectUsername = member.username !== username ? member.username : null;
+  let invitation = await Invitation.findOne({
+    memberId: member._id,
+    slug
+  })
+    .select("+hostAccessToken")
+    .lean();
+
+  if (!invitation || !invitation.hostAccessToken || invitation.hostAccessToken !== token) {
+    throw new AppError(404, "Laporan undangan tidak ditemukan.");
+  }
+
+  if (shouldLockInvitation(invitation)) {
+    await lockInvitationIfNeeded(invitation._id);
+    invitation = {
+      ...invitation,
+      status: "locked",
+      lockedAt: new Date()
+    };
+  }
+
+  return { member, invitation, redirectUsername };
+}
+
+function isHostInvitationActive(invitation) {
+  return ["active", "locked"].includes(invitation.status) && !isInvitationExpired(invitation);
 }
 
 function buildHostSummary(guests, rsvps, wishes) {
