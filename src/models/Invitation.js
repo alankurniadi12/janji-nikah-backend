@@ -7,7 +7,7 @@ const eventSchema = new Schema(
   {
     type: {
       type: String,
-      enum: ["akad", "resepsi"],
+      enum: ["akad", "resepsi", "ngunduh_mantu"],
       required: true
     },
     date: {
@@ -138,11 +138,13 @@ const invitationSchema = new Schema(
     },
     groom: {
       fullName: { type: String, default: "" },
+      nickname: { type: String, default: "" },
       parentsName: { type: String, default: "" },
       photoUrl: { type: String, default: "" }
     },
     bride: {
       fullName: { type: String, default: "" },
+      nickname: { type: String, default: "" },
       parentsName: { type: String, default: "" },
       photoUrl: { type: String, default: "" }
     },

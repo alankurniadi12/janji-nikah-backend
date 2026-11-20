@@ -369,6 +369,7 @@ function createInvitationTitle(groomName, brideName) {
 function normalizeCouple(couple = {}) {
   return {
     fullName: couple.fullName || "",
+    nickname: cleanText(couple.nickname),
     parentsName: couple.parentsName || "",
     photoUrl: couple.photoUrl || ""
   };
@@ -377,6 +378,7 @@ function normalizeCouple(couple = {}) {
 function mergeCouple(current = {}, next = {}) {
   return {
     fullName: next.fullName !== undefined ? next.fullName : current.fullName || "",
+    nickname: next.nickname !== undefined ? cleanText(next.nickname) : current.nickname || "",
     parentsName: next.parentsName !== undefined ? next.parentsName : current.parentsName || "",
     photoUrl: current.photoUrl || ""
   };
