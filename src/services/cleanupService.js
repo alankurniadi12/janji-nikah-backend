@@ -61,8 +61,8 @@ async function cleanupExpiredInvitation(invitation, now) {
   invitation.status = "expired";
   invitation.guestCount = 0;
   invitation.title = "";
-  invitation.groom = { fullName: "", nickname: "", parentsName: "", photoUrl: "" };
-  invitation.bride = { fullName: "", nickname: "", parentsName: "", photoUrl: "" };
+  invitation.groom = { fullName: "", nickname: "", childOrder: null, parentsName: "", photoUrl: "" };
+  invitation.bride = { fullName: "", nickname: "", childOrder: null, parentsName: "", photoUrl: "" };
   invitation.events = [];
   invitation.mainPhotoUrl = "";
   invitation.galleryPhotoUrls = [];

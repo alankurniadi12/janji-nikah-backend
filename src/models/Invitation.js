@@ -143,12 +143,14 @@ const invitationSchema = new Schema(
     groom: {
       fullName: { type: String, default: "" },
       nickname: { type: String, default: "" },
+      childOrder: { type: Number, default: null, min: 1, validate: Number.isInteger },
       parentsName: { type: String, default: "" },
       photoUrl: { type: String, default: "" }
     },
     bride: {
       fullName: { type: String, default: "" },
       nickname: { type: String, default: "" },
+      childOrder: { type: Number, default: null, min: 1, validate: Number.isInteger },
       parentsName: { type: String, default: "" },
       photoUrl: { type: String, default: "" }
     },

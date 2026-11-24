@@ -370,6 +370,7 @@ function normalizeCouple(couple = {}) {
   return {
     fullName: couple.fullName || "",
     nickname: cleanText(couple.nickname),
+    childOrder: normalizeChildOrder(couple.childOrder),
     parentsName: couple.parentsName || "",
     photoUrl: couple.photoUrl || ""
   };
@@ -379,9 +380,20 @@ function mergeCouple(current = {}, next = {}) {
   return {
     fullName: next.fullName !== undefined ? next.fullName : current.fullName || "",
     nickname: next.nickname !== undefined ? cleanText(next.nickname) : current.nickname || "",
+    childOrder: next.childOrder !== undefined ? normalizeChildOrder(next.childOrder) : current.childOrder ?? null,
     parentsName: next.parentsName !== undefined ? next.parentsName : current.parentsName || "",
     photoUrl: current.photoUrl || ""
   };
+}
+
+function normalizeChildOrder(value) {
+  if (value === undefined || value === null || value === "") return null;
+
+  const order = Number(value);
+  if (!Number.isSafeInteger(order) || order < 1) {
+    throw new AppError(400, "Urutan anak wajib berupa angka bulat minimal 1.");
+  }
+  return order;
 }
 
 function normalizeServicePrice(value) {

@@ -4,7 +4,32 @@ import test from "node:test";
 import mongoose from "mongoose";
 
 import Invitation from "../src/models/Invitation.js";
-import { listMemberInvitations, toPublicInvitation } from "../src/services/invitationService.js";
+import { createDraftInvitation, listMemberInvitations, toPublicInvitation } from "../src/services/invitationService.js";
+
+test("stores each partner's child order and includes it in preview data", async (t) => {
+  let createdPayload;
+  t.mock.method(Invitation, "countDocuments", async () => 0);
+  t.mock.method(Invitation, "exists", async () => false);
+  t.mock.method(Invitation, "create", async (payload) => {
+    createdPayload = payload;
+    return { _id: new mongoose.Types.ObjectId(), ...payload };
+  });
+
+  const member = { _id: new mongoose.Types.ObjectId(), username: "member" };
+  const result = await createDraftInvitation(member, {
+    groom: { fullName: "Raka", childOrder: 1, parentsName: "Ayah: Surya\nIbu: Melati" },
+    bride: { fullName: "Amara", childOrder: 3, parentsName: "Ayah: Bima\nIbu: Ratih" }
+  });
+
+  assert.equal(createdPayload.groom.childOrder, 1);
+  assert.equal(createdPayload.bride.childOrder, 3);
+  assert.equal(result.groom.childOrder, 1);
+  assert.equal(result.bride.childOrder, 3);
+  await assert.rejects(
+    () => createDraftInvitation(member, { groom: { childOrder: 1.5 } }),
+    /Urutan anak wajib berupa angka bulat minimal 1/
+  );
+});
 
 test("formats enabled quote with Ar-Rum 21 defaults", () => {
   const publicInvitation = toPublicInvitation({
